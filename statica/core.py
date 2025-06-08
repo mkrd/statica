@@ -71,6 +71,28 @@ def _value_matches_type(value: Any | None, expected_type: Any) -> bool:
 	return isinstance(value, origin)
 
 
+def _get_expected_type(cls: type, attr_name: str) -> Any:
+	"""
+	Get the expected type for a class attribute.
+	Handles type hints and Field descriptors.
+
+	Examples:
+	.. code-block:: python
+		class MyClass(Statica):
+			age: int | None
+			name: str = Field()
+
+		_get_expected_type(MyClass, "age")  # int | None
+		_get_expected_type(MyClass, "name")  # str
+	"""
+
+	return get_type_hints(cls).get(attr_name, Any)
+
+
+########################################################################################
+#### MARK: Validators
+
+
 def _validate_type(value: Any, expected_type: type | UnionType) -> None:
 	"""
 	Validate that the value matches the expected type.
@@ -91,22 +113,46 @@ def _validate_type(value: Any, expected_type: type | UnionType) -> None:
 		raise TypeValidationError(msg)
 
 
-def _get_expected_type(cls: type, attr_name: str) -> Any:
+def _validate_constraints(
+	value: Any,
+	min_length: int | None = None,
+	max_length: int | None = None,
+	min_value: float | None = None,
+	max_value: float | None = None,
+	strip_whitespace: bool | None = None,
+) -> Any:
 	"""
-	Get the expected type for a class attribute.
-	Handles type hints and Field descriptors.
+	If the value is a string, strip the whitespace if `strip_whitespace` is True.
 
-	Examples:
-	.. code-block:: python
-		class MyClass(Statica):
-			age: int | None
-			name: str = Field()
+	If the value is a string, list, tuple, or dict, check its length against
+	the `min_length` and `max_length` constraints.
 
-		_get_expected_type(MyClass, "age")  # int | None
-		_get_expected_type(MyClass, "name")  # str
+	If the value is an int or float, check its value against the `min_value`
+	and `max_value` constraints.
+
+	Throws ConstraintValidationError if any constraints are violated.
 	"""
 
-	return get_type_hints(cls).get(attr_name, Any)
+	if strip_whitespace and isinstance(value, str):
+		value = value.strip()
+
+	if isinstance(value, str | list | tuple | dict):
+		if min_length is not None and len(value) < min_length:
+			msg = f"length must be at least {min_length}"
+			raise ConstraintValidationError(msg)
+		if max_length is not None and len(value) > max_length:
+			msg = f"length must be at most {max_length}"
+			raise ConstraintValidationError(msg)
+
+	if isinstance(value, int | float):
+		if min_value is not None and value < min_value:
+			msg = f"must be at least {min_value}"
+			raise ConstraintValidationError(msg)
+		if max_value is not None and value > max_value:
+			msg = f"must be at most {max_value}"
+			raise ConstraintValidationError(msg)
+
+	return value
 
 
 ########################################################################################
@@ -157,40 +203,28 @@ class FieldDescriptor(Generic[T]):
 			_validate_type(value, self.expected_type)
 
 			if value is not None:
-				value = self._validate_constraints(value)
+				value = _validate_constraints(
+					value,
+					min_length=self.min_length,
+					max_length=self.max_length,
+					min_value=self.min_value,
+					max_value=self.max_value,
+					strip_whitespace=self.strip_whitespace,
+				)
 
 		except TypeValidationError as e:
 			msg = f"{self.name}: {e!s}"
 			error_class = getattr(self.owner, "type_error_class", TypeValidationError)
 			raise error_class(msg) from e
+
 		except ConstraintValidationError as e:
 			msg = f"{self.name}: {e!s}"
 			error_class = getattr(self.owner, "constraint_error_class", ConstraintValidationError)
 			raise error_class(msg) from e
+
 		except ValueError as e:
 			msg = f"{self.name}: {e!s}"
 			raise TypeValidationError(msg) from e
-		return value
-
-	def _validate_constraints(self, value: Any) -> Any:
-		if self.strip_whitespace and isinstance(value, str):
-			value = value.strip()
-
-		if isinstance(value, str | list | tuple | dict):
-			if self.min_length is not None and len(value) < self.min_length:
-				msg = f"length must be at least {self.min_length}"
-				raise ConstraintValidationError(msg)
-			if self.max_length is not None and len(value) > self.max_length:
-				msg = f"length must be at most {self.max_length}"
-				raise ConstraintValidationError(msg)
-
-		if isinstance(value, int | float):
-			if self.min_value is not None and value < self.min_value:
-				msg = f"must be at least {self.min_value}"
-				raise ConstraintValidationError(msg)
-			if self.max_value is not None and value > self.max_value:
-				msg = f"must be at most {self.max_value}"
-				raise ConstraintValidationError(msg)
 
 		return value
 
