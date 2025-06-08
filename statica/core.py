@@ -18,141 +18,13 @@ from typing import (
 )
 
 from statica.exceptions import ConstraintValidationError, TypeValidationError
+from statica.types_utils import get_expected_type
+from statica.validators import validate_constraints, validate_type
 
 if TYPE_CHECKING:
 	from collections.abc import Callable, Mapping
 
 T = TypeVar("T")
-
-
-########################################################################################
-#### MARK: Internal functions
-
-
-def _type_allows_none(expected_type: Any) -> bool:
-	"""
-	Check if the expected type allows None.
-
-	Examples:
-	.. code-block:: python
-		_allows_none(int | None)  # True
-		_allows_none(int)  # False
-	"""
-	if isinstance(expected_type, UnionType):
-		return type(None) in get_args(expected_type)
-	return expected_type is type(None) or expected_type is Any
-
-
-def _value_matches_type(value: Any | None, expected_type: Any) -> bool:
-	"""
-	Check if the value matches the expected type.
-	Handles basic types, Union types, and generic types.
-
-	Examples:
-	.. code-block:: python
-		_value_matches_type(1, int)  # True
-		_value_matches_type(None, int | None)  # True
-		_value_matches_type(None, int)  # False
-	"""
-	# If expected_type is e.g. int | None, pass if value is None
-	if _type_allows_none(expected_type) and value is None:
-		return True
-
-	# Basic types like int, str, etc.
-	if (origin := get_origin(expected_type)) is None:
-		return isinstance(value, expected_type)
-
-	# Handle Union types
-	if origin is UnionType or origin is type(None) or origin is Any:
-		types = get_args(expected_type)
-		return any(_value_matches_type(value, t) for t in types if t is not type(None))
-
-	# Handle generic types
-	return isinstance(value, origin)
-
-
-def _get_expected_type(cls: type, attr_name: str) -> Any:
-	"""
-	Get the expected type for a class attribute.
-	Handles type hints and Field descriptors.
-
-	Examples:
-	.. code-block:: python
-		class MyClass(Statica):
-			age: int | None
-			name: str = Field()
-
-		_get_expected_type(MyClass, "age")  # int | None
-		_get_expected_type(MyClass, "name")  # str
-	"""
-
-	return get_type_hints(cls).get(attr_name, Any)
-
-
-########################################################################################
-#### MARK: Validators
-
-
-def _validate_type(value: Any, expected_type: type | UnionType) -> None:
-	"""
-	Validate that the value matches the expected type.
-	Throws TypeValidationError if the type does not match.
-
-	Examples:
-	.. code-block:: python
-		_validate_type(1, int)  # No exception
-		_validate_type("abc", str)  # No exception
-		_validate_type(1, str)  # Raises TypeValidationError
-		_validate_type(None, int | None)  # No exception
-		_validate_type(None, int)  # Raises TypeValidationError
-	"""
-	if not _value_matches_type(value, expected_type):
-		expected_type_str = str(expected_type) if type(expected_type) is UnionType else expected_type.__name__
-
-		msg = f"expected type '{expected_type_str}', got '{type(value).__name__}'"
-		raise TypeValidationError(msg)
-
-
-def _validate_constraints(
-	value: Any,
-	min_length: int | None = None,
-	max_length: int | None = None,
-	min_value: float | None = None,
-	max_value: float | None = None,
-	strip_whitespace: bool | None = None,
-) -> Any:
-	"""
-	If the value is a string, strip the whitespace if `strip_whitespace` is True.
-
-	If the value is a string, list, tuple, or dict, check its length against
-	the `min_length` and `max_length` constraints.
-
-	If the value is an int or float, check its value against the `min_value`
-	and `max_value` constraints.
-
-	Throws ConstraintValidationError if any constraints are violated.
-	"""
-
-	if strip_whitespace and isinstance(value, str):
-		value = value.strip()
-
-	if isinstance(value, str | list | tuple | dict):
-		if min_length is not None and len(value) < min_length:
-			msg = f"length must be at least {min_length}"
-			raise ConstraintValidationError(msg)
-		if max_length is not None and len(value) > max_length:
-			msg = f"length must be at most {max_length}"
-			raise ConstraintValidationError(msg)
-
-	if isinstance(value, int | float):
-		if min_value is not None and value < min_value:
-			msg = f"must be at least {min_value}"
-			raise ConstraintValidationError(msg)
-		if max_value is not None and value > max_value:
-			msg = f"must be at most {max_value}"
-			raise ConstraintValidationError(msg)
-
-	return value
 
 
 ########################################################################################
@@ -176,10 +48,14 @@ class FieldDescriptor(Generic[T]):
 	strip_whitespace: bool | None = None
 	cast_to: Callable[..., T] | None = None
 
+	alias: str | None = None
+	alias_for_parsing: str | None = None
+	alias_for_serialization: str | None = None
+
 	def __set_name__(self, owner: Any, name: str) -> None:
 		self.name = name
 		self.owner = owner
-		self.expected_type = _get_expected_type(owner, name)
+		self.expected_type = get_expected_type(owner, name)
 
 	@overload
 	def __get__(self, instance: None, owner: Any) -> FieldDescriptor[T]: ...
@@ -200,10 +76,10 @@ class FieldDescriptor(Generic[T]):
 			if self.cast_to is not None:
 				value = self.cast_to(value)
 
-			_validate_type(value, self.expected_type)
+			validate_type(value, self.expected_type)
 
 			if value is not None:
-				value = _validate_constraints(
+				value = validate_constraints(
 					value,
 					min_length=self.min_length,
 					max_length=self.max_length,
@@ -229,6 +105,22 @@ class FieldDescriptor(Generic[T]):
 		return value
 
 
+def get_field_descriptors(cls: type[Statica]) -> list[FieldDescriptor]:
+	"""
+	Get all Field descriptors for a class.
+	Returns a list of FieldDescriptor instances.
+	"""
+
+	descriptors = []
+
+	for field_name in cls.__annotations__:
+		field_descriptor = getattr(cls, field_name)
+		assert isinstance(field_descriptor, FieldDescriptor)
+		descriptors.append(field_descriptor)
+
+	return descriptors
+
+
 ########################################################################################
 #### MARK: Type-safe field function
 
@@ -241,6 +133,9 @@ def Field(  # noqa: N802
 	max_value: float | None = None,
 	strip_whitespace: bool | None = None,
 	cast_to: Callable[..., T] | None = None,
+	alias: str | None = None,
+	alias_for_parsing: str | None = None,
+	alias_for_serialization: str | None = None,
 ) -> Any:
 	"""
 	Type-safe field function that returns the correct type for type checkers
@@ -254,6 +149,9 @@ def Field(  # noqa: N802
 		max_value=max_value,
 		strip_whitespace=strip_whitespace,
 		cast_to=cast_to,
+		alias=alias,
+		alias_for_parsing=alias_for_parsing,
+		alias_for_serialization=alias_for_serialization,
 	)
 
 	if TYPE_CHECKING:
@@ -276,8 +174,6 @@ class StaticaMeta(type):
 		Set up Field descriptors for each type-hinted attribute which does not have one
 		already, but only for subclasses of Statica.
 		"""
-
-		print(f"__new__({name=}, {bases=}, {namespace=})")
 
 		if name == "Statica":
 			return super().__new__(cls, name, bases, namespace)
@@ -325,14 +221,35 @@ class StaticaMeta(type):
 class Statica(metaclass=StaticaMeta):
 	@classmethod
 	def from_map(cls, mapping: Mapping[str, Any]) -> Self:
-		instance = cls(**mapping)
+		mapping_key_to_field_keys = {}  # Maps alias to field name
+
+		for field_descriptor in get_field_descriptors(cls):
+			# Use alias for parsing if it exists
+			alias = field_descriptor.alias_for_parsing or field_descriptor.alias or field_descriptor.name
+			mapping_key_to_field_keys[alias] = field_descriptor.name
+
+		parsed_mapping = {mapping_key_to_field_keys[k]: v for k, v in mapping.items()}
+
+		instance = cls(**parsed_mapping)
 
 		# Go through type hints and set values
 		for attribute_name in get_type_hints(instance.__class__):
-			value = mapping.get(attribute_name)
+			value = parsed_mapping.get(attribute_name)
 			setattr(instance, attribute_name, value)  # Descriptor __set__ validates
 
 		return instance
+
+	def to_dict(self) -> dict[str, Any]:
+		"""
+		Convert the instance to a dictionary, using the field names as keys.
+		"""
+		result = {}
+		for field_descriptor in get_field_descriptors(self.__class__):
+			# Use alias for serialization if it exists
+			alias = field_descriptor.alias_for_serialization or field_descriptor.alias or field_descriptor.name
+			result[alias] = getattr(self, field_descriptor.name)
+
+		return result
 
 
 ########################################################################################
@@ -346,13 +263,13 @@ if __name__ == "__main__":
 		name: str = Field(min_length=3, max_length=50, strip_whitespace=True)
 		description: str | None = Field(max_length=200)
 		num: int | float
-		float_num: float | None
+		float_num: float | None = Field(alias="floatNum")
 
 	data = {
 		"name": "Test Payload",
 		"description": "ddf",
 		"num": 5,
-		"float_num": 5.5,
+		"floatNum": 5.5,
 	}
 
 	payload = Payload.from_map(data)
@@ -363,10 +280,3 @@ if __name__ == "__main__":
 		num=42,
 		float_num=3.14,
 	)
-
-	class ShortSyntax(Statica):
-		name: str = Field(min_length=3, max_length=5, strip_whitespace=True)
-
-	print("Testing ShortSyntax...")
-	short = ShortSyntax(name="test")
-	print(f"short.name = {short.name}")

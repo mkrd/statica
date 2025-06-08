@@ -1,6 +1,6 @@
 [project]
 name = "statica"
-version = "1.0.2"
+version = "1.1.0"
 description = "A minimalistic data validation library"
 readme = "README.md"
 authors = [{ name = "Marcel Kröker", email = "kroeker.marcel@gmail.com" }]
