@@ -17,25 +17,12 @@ from typing import (
 	overload,
 )
 
+from statica.exceptions import ConstraintValidationError, TypeValidationError
+
 if TYPE_CHECKING:
 	from collections.abc import Callable, Mapping
 
 T = TypeVar("T")
-
-########################################################################################
-#### MARK: Exceptions
-
-
-class ValidationError(Exception):
-	"""Base validation error."""
-
-
-class TypeValidationError(ValidationError):
-	"""Raised when type validation fails."""
-
-
-class ConstraintValidationError(ValidationError):
-	"""Raised when constraint validation fails."""
 
 
 ########################################################################################
