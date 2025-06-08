@@ -1,3 +1,10 @@
+
+
+![Logo](https://github.com/mkrd/Flask-Squeeze/blob/master/assets/logo.svg?raw=true)
+
+![Tests](https://github.com/mkrd/statica/actions/workflows/test.yml/badge.svg)
+![Coverage](https://github.com/mkrd/statica/blob/main/assets/coverage.svg?raw=true)
+
 # Statica
 
 Statica is a Python library for defining and validating structured data with type annotations and constraints. It provides an easy-to-use framework for creating type-safe models with comprehensive validation for both types and constraints.
