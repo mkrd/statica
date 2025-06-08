@@ -18,7 +18,6 @@ from typing import (
 )
 
 from statica.exceptions import ConstraintValidationError, TypeValidationError
-from statica.types_utils import get_expected_type
 from statica.validators import validate_constraints, validate_type
 
 if TYPE_CHECKING:
@@ -55,7 +54,7 @@ class FieldDescriptor(Generic[T]):
 	def __set_name__(self, owner: Any, name: str) -> None:
 		self.name = name
 		self.owner = owner
-		self.expected_type = get_expected_type(owner, name)
+		self.expected_type = owner.__annotations__.get(name)
 
 	@overload
 	def __get__(self, instance: None, owner: Any) -> FieldDescriptor[T]: ...

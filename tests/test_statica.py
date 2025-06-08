@@ -1,19 +1,6 @@
 import pytest
 
-from statica.core import ConstraintValidationError, Field, Statica, TypeValidationError, get_expected_type
-
-
-def test_get_expected_type() -> None:
-	class TestClass(Statica):
-		required_field: str
-		optional_field: str | None
-		required_with_field: str = Field()
-		optional_with_field: str | None = Field()
-
-	assert get_expected_type(TestClass, "required_field") is str
-	assert get_expected_type(TestClass, "optional_field") == str | None
-	assert get_expected_type(TestClass, "required_with_field") is str
-	assert get_expected_type(TestClass, "optional_with_field") == str | None
+from statica.core import ConstraintValidationError, Field, Statica, TypeValidationError
 
 
 def test_basic_syntax() -> None:
