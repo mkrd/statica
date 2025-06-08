@@ -13,18 +13,8 @@ While pydantic is a powerful tool for data validation and parsing, Statica offer
 
 1. **Lightweight**: Statica does not rely on any third-party dependencies, making it ideal for projects where minimizing external dependencies is a priority.
 2. **Customizable Validation**: Statica allows fine-grained control over type and constraint validation through customizable field descriptors (`Field`) and error classes.
-3. **Ease of Use**: With its simple, Pythonic design, Statica is intuitive for developers already familiar with Python's `dataclasses` and type hinting.
+3. **Ease of Use**: With its simple, Pythonic design, Statica is intuitive for developers already familiar with Python's `dataclasses` and type hinting. It avoids much of the magic that pydantic employs.
 4. **Performance**: For use cases where performance, especially memory usage, is critical, Statica avoids some of the overhead introduced by the advanced features of pydantic.
-
-### When to Use Statica
-
-Statica is the perfect choice when:
-- You need a straightforward library to enforce type and constraint validation in your Python models.
-- You want to avoid introducing additional dependencies to your project.
-- You are working in environments where simplicity and lightweight design are critical, such as embedded systems, CLI tools, or minimalistic services.
-- You prefer a library that closely aligns with Python's native features like `dataclasses` and type annotations.
-
-If your project requires advanced features like automatic JSON schema generation, model serialization/deserialization, or integration with web frameworks, Pydantic might be a better fit. However, for simpler use cases that prioritize lightweight and dependency-free design, Statica is the ideal choice.
 
 ## Features
 
