@@ -8,13 +8,23 @@ Statica is a Python library for defining and validating structured data with typ
 
 ## Why Statica?
 
-Statica was created to address the need for a lightweight, flexible, and dependency-free alternative to libraries like pydantic. 
+
+<!-- 5. Memory Usage (10,000 objects)
+----------------------------------------
+Pydantic Model                : 45.78 MB
+Regular Dataclass             : 9.93 MB
+Frozen Dataclass              : 9.93 MB
+Slotted Dataclass             : 9.93 MB
+Frozen + Slotted Dataclass    : 9.93 MB
+Statica Model                 : 15.27 MB -->
+
+Statica was created to address the need for a lightweight, flexible, and dependency-free alternative to libraries like pydantic.
 While pydantic is a powerful tool for data validation and parsing, Statica offers some distinct advantages in specific situations:
 
 1. **Lightweight**: Statica does not rely on any third-party dependencies, making it ideal for projects where minimizing external dependencies is a priority.
 2. **Customizable Validation**: Statica allows fine-grained control over type and constraint validation through customizable field descriptors (`Field`) and error classes.
 3. **Ease of Use**: With its simple, Pythonic design, Statica is intuitive for developers already familiar with Python's `dataclasses` and type hinting. It avoids much of the magic that pydantic employs.
-4. **Performance**: For use cases where performance, especially memory usage, is critical, Statica avoids some of the overhead introduced by the advanced features of pydantic.
+4. **Performance**: For use cases where performance is critical. Pydantic needs `3x` more memory than Statica for the same models.
 
 ## Features
 
