@@ -176,6 +176,10 @@ class FieldDescriptor(Generic[T]):
 	strip_whitespace: bool | None = None
 	cast_to: Callable[..., T] | None = None
 
+	alias: str | None = None
+	alias_for_parsing: str | None = None
+	alias_for_serialization: str | None = None
+
 	def __set_name__(self, owner: Any, name: str) -> None:
 		self.name = name
 		self.owner = owner
@@ -241,6 +245,9 @@ def Field(  # noqa: N802
 	max_value: float | None = None,
 	strip_whitespace: bool | None = None,
 	cast_to: Callable[..., T] | None = None,
+	alias: str | None = None,
+	alias_for_parsing: str | None = None,
+	alias_for_serialization: str | None = None,
 ) -> Any:
 	"""
 	Type-safe field function that returns the correct type for type checkers
@@ -254,6 +261,9 @@ def Field(  # noqa: N802
 		max_value=max_value,
 		strip_whitespace=strip_whitespace,
 		cast_to=cast_to,
+		alias=alias,
+		alias_for_parsing=alias_for_parsing,
+		alias_for_serialization=alias_for_serialization,
 	)
 
 	if TYPE_CHECKING:
@@ -276,8 +286,6 @@ class StaticaMeta(type):
 		Set up Field descriptors for each type-hinted attribute which does not have one
 		already, but only for subclasses of Statica.
 		"""
-
-		print(f"__new__({name=}, {bases=}, {namespace=})")
 
 		if name == "Statica":
 			return super().__new__(cls, name, bases, namespace)
@@ -325,14 +333,57 @@ class StaticaMeta(type):
 class Statica(metaclass=StaticaMeta):
 	@classmethod
 	def from_map(cls, mapping: Mapping[str, Any]) -> Self:
-		instance = cls(**mapping)
+		mapping_key_to_field_keys = {}  # Maps alias to field name
+
+		for field_name, field in cls.__dict__.items():
+			# Skip private attributes
+			if field_name not in cls.__annotations__:
+				continue
+
+			# Skip if not a FieldDescriptor
+			if not isinstance(field, FieldDescriptor):
+				continue
+
+			# Use alias for parsing if it exists
+			alias = field.alias_for_parsing or field.alias or field.name
+			mapping_key_to_field_keys[alias] = field_name
+
+		parsed_mapping = {mapping_key_to_field_keys[k]: v for k, v in mapping.items()}
+
+		instance = cls(**parsed_mapping)
 
 		# Go through type hints and set values
 		for attribute_name in get_type_hints(instance.__class__):
-			value = mapping.get(attribute_name)
+			value = parsed_mapping.get(attribute_name)
 			setattr(instance, attribute_name, value)  # Descriptor __set__ validates
 
 		return instance
+
+	def get_fields(self) -> list[tuple[str, FieldDescriptor]]:
+		"""
+		Get a list of field names for the class.
+		"""
+
+		fields = []
+
+		for field_name in self.__annotations__:
+			field_descriptor = getattr(self.__class__, field_name)
+			assert isinstance(field_descriptor, FieldDescriptor)
+			fields.append((field_name, field_descriptor))
+
+		return fields
+
+	def to_dict(self) -> dict[str, Any]:
+		"""
+		Convert the instance to a dictionary, using the field names as keys.
+		"""
+		result = {}
+		for field_name, field_descriptor in self.get_fields():
+			# Use alias for serialization if it exists
+			alias = field_descriptor.alias_for_serialization or field_descriptor.alias or field_name
+			result[alias] = getattr(self, field_name)
+
+		return result
 
 
 ########################################################################################
@@ -346,13 +397,13 @@ if __name__ == "__main__":
 		name: str = Field(min_length=3, max_length=50, strip_whitespace=True)
 		description: str | None = Field(max_length=200)
 		num: int | float
-		float_num: float | None
+		float_num: float | None = Field(alias="floatNum")
 
 	data = {
 		"name": "Test Payload",
 		"description": "ddf",
 		"num": 5,
-		"float_num": 5.5,
+		"floatNum": 5.5,
 	}
 
 	payload = Payload.from_map(data)
@@ -363,10 +414,3 @@ if __name__ == "__main__":
 		num=42,
 		float_num=3.14,
 	)
-
-	class ShortSyntax(Statica):
-		name: str = Field(min_length=3, max_length=5, strip_whitespace=True)
-
-	print("Testing ShortSyntax...")
-	short = ShortSyntax(name="test")
-	print(f"short.name = {short.name}")
