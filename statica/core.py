@@ -233,6 +233,22 @@ class FieldDescriptor(Generic[T]):
 		return value
 
 
+def get_field_descriptors(cls: type[Statica]) -> list[FieldDescriptor]:
+	"""
+	Get all Field descriptors for a class.
+	Returns a list of FieldDescriptor instances.
+	"""
+
+	descriptors = []
+
+	for field_name in cls.__annotations__:
+		field_descriptor = getattr(cls, field_name)
+		assert isinstance(field_descriptor, FieldDescriptor)
+		descriptors.append(field_descriptor)
+
+	return descriptors
+
+
 ########################################################################################
 #### MARK: Type-safe field function
 
@@ -335,18 +351,10 @@ class Statica(metaclass=StaticaMeta):
 	def from_map(cls, mapping: Mapping[str, Any]) -> Self:
 		mapping_key_to_field_keys = {}  # Maps alias to field name
 
-		for field_name, field in cls.__dict__.items():
-			# Skip private attributes
-			if field_name not in cls.__annotations__:
-				continue
-
-			# Skip if not a FieldDescriptor
-			if not isinstance(field, FieldDescriptor):
-				continue
-
+		for field_descriptor in get_field_descriptors(cls):
 			# Use alias for parsing if it exists
-			alias = field.alias_for_parsing or field.alias or field.name
-			mapping_key_to_field_keys[alias] = field_name
+			alias = field_descriptor.alias_for_parsing or field_descriptor.alias or field_descriptor.name
+			mapping_key_to_field_keys[alias] = field_descriptor.name
 
 		parsed_mapping = {mapping_key_to_field_keys[k]: v for k, v in mapping.items()}
 
@@ -359,29 +367,15 @@ class Statica(metaclass=StaticaMeta):
 
 		return instance
 
-	def get_fields(self) -> list[tuple[str, FieldDescriptor]]:
-		"""
-		Get a list of field names for the class.
-		"""
-
-		fields = []
-
-		for field_name in self.__annotations__:
-			field_descriptor = getattr(self.__class__, field_name)
-			assert isinstance(field_descriptor, FieldDescriptor)
-			fields.append((field_name, field_descriptor))
-
-		return fields
-
 	def to_dict(self) -> dict[str, Any]:
 		"""
 		Convert the instance to a dictionary, using the field names as keys.
 		"""
 		result = {}
-		for field_name, field_descriptor in self.get_fields():
+		for field_descriptor in get_field_descriptors(self.__class__):
 			# Use alias for serialization if it exists
-			alias = field_descriptor.alias_for_serialization or field_descriptor.alias or field_name
-			result[alias] = getattr(self, field_name)
+			alias = field_descriptor.alias_for_serialization or field_descriptor.alias or field_descriptor.name
+			result[alias] = getattr(self, field_descriptor.name)
 
 		return result
 
