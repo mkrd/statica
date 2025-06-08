@@ -197,5 +197,5 @@ Statica is licensed under the MIT License. See the [LICENSE](LICENSE) file for m
 
 ## Acknowledgments
 
-Statica was built to simplify data validation and provide a robust and simple framework for type-safe models in Python, inspired by libraries like `pydantic` and `dataclasses`.
+Statica was built to simplify data validation and provide a robust and simple framework for type-safe models in Python, inspired by `pydantic` and `dataclasses`.
 
