@@ -4,7 +4,6 @@ from types import UnionType
 from typing import Any
 
 from statica.exceptions import ConstraintValidationError, TypeValidationError
-from statica.types_utils import value_matches_type
 
 
 def validate_type(value: Any, expected_type: type | UnionType) -> None:
@@ -20,11 +19,12 @@ def validate_type(value: Any, expected_type: type | UnionType) -> None:
 		_validate_type(None, int | None)  # No exception
 		_validate_type(None, int)  # Raises TypeValidationError
 	"""
-	if not value_matches_type(value, expected_type):
-		expected_type_str = str(expected_type) if type(expected_type) is UnionType else expected_type.__name__
+	if isinstance(value, expected_type):
+		return
 
-		msg = f"expected type '{expected_type_str}', got '{type(value).__name__}'"
-		raise TypeValidationError(msg)
+	expected_type_str = str(expected_type) if type(expected_type) is UnionType else expected_type.__name__
+	msg = f"expected type '{expected_type_str}', got '{type(value).__name__}'"
+	raise TypeValidationError(msg)
 
 
 def validate_constraints(

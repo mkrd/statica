@@ -18,7 +18,6 @@ from typing import (
 )
 
 from statica.exceptions import ConstraintValidationError, TypeValidationError
-from statica.types_utils import get_expected_type
 from statica.validators import validate_constraints, validate_type
 
 if TYPE_CHECKING:
@@ -55,7 +54,7 @@ class FieldDescriptor(Generic[T]):
 	def __set_name__(self, owner: Any, name: str) -> None:
 		self.name = name
 		self.owner = owner
-		self.expected_type = get_expected_type(owner, name)
+		self.expected_type = owner.__annotations__.get(name)
 
 	@overload
 	def __get__(self, instance: None, owner: Any) -> FieldDescriptor[T]: ...
@@ -78,7 +77,13 @@ class FieldDescriptor(Generic[T]):
 
 			validate_type(value, self.expected_type)
 
-			if value is not None:
+			if (
+				self.min_length is not None
+				or self.max_length is not None
+				or self.min_value is not None
+				or self.max_value is not None
+				or self.strip_whitespace is not None
+			):
 				value = validate_constraints(
 					value,
 					min_length=self.min_length,
@@ -182,20 +187,15 @@ class StaticaMeta(type):
 
 		# Generate custom __init__ method
 
-		def custom_init(self: Statica, **kwargs: Any) -> None:
+		def statica_init(self: Statica, **kwargs: Any) -> None:
 			for field_name, field_type in annotations.items():
-				# If it is union type with none continuation, skip it
-				if get_origin(field_type) is UnionType and type(None) in get_args(field_type):
-					if field_name not in kwargs:
-						setattr(self, field_name, None)
-					continue
-
-				if field_name not in kwargs:
+				if field_name not in kwargs and not isinstance(None, field_type):
 					msg = f"Missing required field: {field_name}"
 					raise TypeValidationError(msg)
-				setattr(self, field_name, kwargs[field_name])
 
-		namespace["__init__"] = custom_init
+				setattr(self, field_name, kwargs.get(field_name))
+
+		namespace["__init__"] = statica_init
 
 		# Set up Field descriptors for type-hinted attributes
 

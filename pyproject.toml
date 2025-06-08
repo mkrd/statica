@@ -26,6 +26,7 @@ dependencies = []
 [dependency-groups]
 dev = [
 	"mypy ~= 1.16.0",
+	"pyinstrument>=5.0.2",
 	"pytest-cov ~= 6.1.0",
 	"ruff ~= 0.11.0",
 ]
@@ -77,6 +78,9 @@ quote-style = "double"
 #### MARK: Testing
 
 [tool.coverage.report]
+omit = [
+    "benchmark_*.py",
+]
 exclude_also = [
 	"if TYPE_CHECKING:",
 	'if __name__ == "__main__":',
