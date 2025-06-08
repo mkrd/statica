@@ -106,12 +106,7 @@ def _get_expected_type(cls: type, attr_name: str) -> Any:
 		_get_expected_type(MyClass, "name")  # str
 	"""
 
-	expected_type = get_type_hints(cls).get(attr_name, Any)
-
-	if get_origin(expected_type) is FieldDescriptor:
-		return get_args(expected_type)[0]  # Get type from generic
-
-	return expected_type
+	return get_type_hints(cls).get(attr_name, Any)
 
 
 ########################################################################################
