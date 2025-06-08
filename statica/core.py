@@ -239,6 +239,9 @@ def Field(  # noqa: N802
 
 @dataclass_transform(kw_only_default=True)
 class StaticaMeta(type):
+	type_error_class: type[Exception] = TypeValidationError
+	constraint_error_class: type[Exception] = ConstraintValidationError
+
 	def __new__(cls, name: str, bases: tuple, namespace: dict[str, Any]) -> type:
 		"""
 		Set up Field descriptors for each type-hinted attribute which does not have one
@@ -291,9 +294,6 @@ class StaticaMeta(type):
 
 
 class Statica(metaclass=StaticaMeta):
-	type_error_class: type[Exception] = TypeValidationError
-	constraint_error_class: type[Exception] = ConstraintValidationError
-
 	@classmethod
 	def from_map(cls, mapping: Mapping[str, Any]) -> Self:
 		instance = cls(**mapping)
