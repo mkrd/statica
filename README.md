@@ -8,7 +8,8 @@ Statica is a Python library for defining and validating structured data with typ
 
 ## Why Statica?
 
-Statica was created to address the need for a lightweight, flexible, and dependency-free alternative to libraries like [Pydantic](https://github.com/pydantic/pydantic). While Pydantic is a powerful tool for data validation and parsing, Statica offers some distinct advantages in specific situations:
+Statica was created to address the need for a lightweight, flexible, and dependency-free alternative to libraries like pydantic. 
+While pydantic is a powerful tool for data validation and parsing, Statica offers some distinct advantages in specific situations:
 
 1. **Lightweight**: Statica does not rely on any third-party dependencies, making it ideal for projects where minimizing external dependencies is a priority.
 2. **Customizable Validation**: Statica allows fine-grained control over type and constraint validation through customizable field descriptors (`Field`) and error classes.
