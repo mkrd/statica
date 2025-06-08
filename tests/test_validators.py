@@ -1,5 +1,3 @@
-from typing import Generic, TypeVar
-
 import pytest
 
 from statica.core import TypeValidationError

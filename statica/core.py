@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from types import UnionType
 from typing import (
 	TYPE_CHECKING,
 	Any,
@@ -11,8 +10,6 @@ from typing import (
 	TypeVar,
 	cast,
 	dataclass_transform,
-	get_args,
-	get_origin,
 	get_type_hints,
 	overload,
 )
