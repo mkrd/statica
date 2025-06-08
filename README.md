@@ -151,6 +151,24 @@ except CustomError as e:
     print(e)  # Output: "num: must be at least 1"
 ```
 
+Or, define a BaseClass which configures the error classes globally:
+
+```python
+from statica.core import Statica, ConstraintValidationError, TypeValidationError
+
+class BaseClass(Statica):
+    constraint_error_class = ConstraintValidationError
+    type_error_class = TypeValidationError
+
+class CustomPayload(BaseClass):
+    num: int = Field(min_value=1, max_value=10)
+
+try:
+    payload = CustomPayload(num=0)
+except ConstraintValidationError as e:
+    print(e)  # Output: "num: must be at least 1"
+```
+
 
 Aliasing
 ----------------------------------------------------------------------------------------
