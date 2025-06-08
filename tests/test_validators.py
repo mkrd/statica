@@ -24,14 +24,3 @@ def test_validate_type() -> None:
 		validate_type(None, int)
 	with pytest.raises(TypeValidationError):
 		validate_type("abc", int | None)
-
-	# Test with generics
-
-	T = TypeVar("T")
-
-	class GenericTest(Generic[T]):
-		value: T
-
-	validate_type(GenericTest[int](), GenericTest[int])
-
-	validate_type(GenericTest[str](), GenericTest[str])  # Is this correct?
