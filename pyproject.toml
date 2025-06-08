@@ -1,7 +1,7 @@
 [project]
 name = "statica"
-version = "1.0.0"
-description = "Minimalistic validation library for Python 3.11+"
+version = "1.0.1"
+description = "A minimalistic data validation library"
 readme = "README.md"
 authors = [{ name = "Marcel Kröker", email = "kroeker.marcel@gmail.com" }]
 license = { file = "LICENSE" }
