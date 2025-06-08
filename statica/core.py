@@ -18,141 +18,13 @@ from typing import (
 )
 
 from statica.exceptions import ConstraintValidationError, TypeValidationError
+from statica.types_utils import get_expected_type
+from statica.validators import validate_constraints, validate_type
 
 if TYPE_CHECKING:
 	from collections.abc import Callable, Mapping
 
 T = TypeVar("T")
-
-
-########################################################################################
-#### MARK: Internal functions
-
-
-def _type_allows_none(expected_type: Any) -> bool:
-	"""
-	Check if the expected type allows None.
-
-	Examples:
-	.. code-block:: python
-		_allows_none(int | None)  # True
-		_allows_none(int)  # False
-	"""
-	if isinstance(expected_type, UnionType):
-		return type(None) in get_args(expected_type)
-	return expected_type is type(None) or expected_type is Any
-
-
-def _value_matches_type(value: Any | None, expected_type: Any) -> bool:
-	"""
-	Check if the value matches the expected type.
-	Handles basic types, Union types, and generic types.
-
-	Examples:
-	.. code-block:: python
-		_value_matches_type(1, int)  # True
-		_value_matches_type(None, int | None)  # True
-		_value_matches_type(None, int)  # False
-	"""
-	# If expected_type is e.g. int | None, pass if value is None
-	if _type_allows_none(expected_type) and value is None:
-		return True
-
-	# Basic types like int, str, etc.
-	if (origin := get_origin(expected_type)) is None:
-		return isinstance(value, expected_type)
-
-	# Handle Union types
-	if origin is UnionType or origin is type(None) or origin is Any:
-		types = get_args(expected_type)
-		return any(_value_matches_type(value, t) for t in types if t is not type(None))
-
-	# Handle generic types
-	return isinstance(value, origin)
-
-
-def _get_expected_type(cls: type, attr_name: str) -> Any:
-	"""
-	Get the expected type for a class attribute.
-	Handles type hints and Field descriptors.
-
-	Examples:
-	.. code-block:: python
-		class MyClass(Statica):
-			age: int | None
-			name: str = Field()
-
-		_get_expected_type(MyClass, "age")  # int | None
-		_get_expected_type(MyClass, "name")  # str
-	"""
-
-	return get_type_hints(cls).get(attr_name, Any)
-
-
-########################################################################################
-#### MARK: Validators
-
-
-def _validate_type(value: Any, expected_type: type | UnionType) -> None:
-	"""
-	Validate that the value matches the expected type.
-	Throws TypeValidationError if the type does not match.
-
-	Examples:
-	.. code-block:: python
-		_validate_type(1, int)  # No exception
-		_validate_type("abc", str)  # No exception
-		_validate_type(1, str)  # Raises TypeValidationError
-		_validate_type(None, int | None)  # No exception
-		_validate_type(None, int)  # Raises TypeValidationError
-	"""
-	if not _value_matches_type(value, expected_type):
-		expected_type_str = str(expected_type) if type(expected_type) is UnionType else expected_type.__name__
-
-		msg = f"expected type '{expected_type_str}', got '{type(value).__name__}'"
-		raise TypeValidationError(msg)
-
-
-def _validate_constraints(
-	value: Any,
-	min_length: int | None = None,
-	max_length: int | None = None,
-	min_value: float | None = None,
-	max_value: float | None = None,
-	strip_whitespace: bool | None = None,
-) -> Any:
-	"""
-	If the value is a string, strip the whitespace if `strip_whitespace` is True.
-
-	If the value is a string, list, tuple, or dict, check its length against
-	the `min_length` and `max_length` constraints.
-
-	If the value is an int or float, check its value against the `min_value`
-	and `max_value` constraints.
-
-	Throws ConstraintValidationError if any constraints are violated.
-	"""
-
-	if strip_whitespace and isinstance(value, str):
-		value = value.strip()
-
-	if isinstance(value, str | list | tuple | dict):
-		if min_length is not None and len(value) < min_length:
-			msg = f"length must be at least {min_length}"
-			raise ConstraintValidationError(msg)
-		if max_length is not None and len(value) > max_length:
-			msg = f"length must be at most {max_length}"
-			raise ConstraintValidationError(msg)
-
-	if isinstance(value, int | float):
-		if min_value is not None and value < min_value:
-			msg = f"must be at least {min_value}"
-			raise ConstraintValidationError(msg)
-		if max_value is not None and value > max_value:
-			msg = f"must be at most {max_value}"
-			raise ConstraintValidationError(msg)
-
-	return value
 
 
 ########################################################################################
@@ -183,7 +55,7 @@ class FieldDescriptor(Generic[T]):
 	def __set_name__(self, owner: Any, name: str) -> None:
 		self.name = name
 		self.owner = owner
-		self.expected_type = _get_expected_type(owner, name)
+		self.expected_type = get_expected_type(owner, name)
 
 	@overload
 	def __get__(self, instance: None, owner: Any) -> FieldDescriptor[T]: ...
@@ -204,10 +76,10 @@ class FieldDescriptor(Generic[T]):
 			if self.cast_to is not None:
 				value = self.cast_to(value)
 
-			_validate_type(value, self.expected_type)
+			validate_type(value, self.expected_type)
 
 			if value is not None:
-				value = _validate_constraints(
+				value = validate_constraints(
 					value,
 					min_length=self.min_length,
 					max_length=self.max_length,

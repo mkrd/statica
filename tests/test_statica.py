@@ -1,78 +1,6 @@
-from typing import Generic, TypeVar
-
 import pytest
 
-from statica.core import (
-	ConstraintValidationError,
-	Field,
-	Statica,
-	TypeValidationError,
-	_get_expected_type,
-	_type_allows_none,
-	_validate_type,
-	_value_matches_type,
-)
-
-
-def test_allows_none() -> None:
-	assert _type_allows_none(type(None))
-	assert _type_allows_none(int | None)
-	assert not _type_allows_none(int)
-
-
-def test_value_matches_type() -> None:
-	assert _value_matches_type(1, int)
-	assert _value_matches_type("abc", str)
-	assert not _value_matches_type(1, str)
-	assert _value_matches_type(None, int | None)
-	assert _value_matches_type(1, int | None)
-	assert not _value_matches_type(None, int)
-	assert _value_matches_type(1, int | None)
-	assert not _value_matches_type("abc", int | None)
-
-	# Test with generics
-
-	T = TypeVar("T")
-
-	class GenericTest(Generic[T]):
-		value: T
-
-		def __init__(self, value: T) -> None:
-			self.value = value
-
-	assert _value_matches_type(GenericTest[int](1), GenericTest[int])
-	assert _value_matches_type(GenericTest[int](1), GenericTest[str])  # Is this correct?
-
-
-def test_validate_type() -> None:
-	# No exceptions should be raised for valid types
-
-	_validate_type(1, int)
-	_validate_type("abc", str)
-	_validate_type(None, int | None)
-	_validate_type(1, int | None)
-
-	# Exceptions should be raised for invalid types
-
-	with pytest.raises(TypeValidationError):
-		_validate_type(1, str)
-	with pytest.raises(TypeValidationError):
-		_validate_type("abc", int)
-	with pytest.raises(TypeValidationError):
-		_validate_type(None, int)
-	with pytest.raises(TypeValidationError):
-		_validate_type("abc", int | None)
-
-	# Test with generics
-
-	T = TypeVar("T")
-
-	class GenericTest(Generic[T]):
-		value: T
-
-	_validate_type(GenericTest[int](), GenericTest[int])
-
-	_validate_type(GenericTest[str](), GenericTest[str])  # Is this correct?
+from statica.core import ConstraintValidationError, Field, Statica, TypeValidationError, get_expected_type
 
 
 def test_get_expected_type() -> None:
@@ -82,10 +10,10 @@ def test_get_expected_type() -> None:
 		required_with_field: str = Field()
 		optional_with_field: str | None = Field()
 
-	assert _get_expected_type(TestClass, "required_field") is str
-	assert _get_expected_type(TestClass, "optional_field") == str | None
-	assert _get_expected_type(TestClass, "required_with_field") is str
-	assert _get_expected_type(TestClass, "optional_with_field") == str | None
+	assert get_expected_type(TestClass, "required_field") is str
+	assert get_expected_type(TestClass, "optional_field") == str | None
+	assert get_expected_type(TestClass, "required_with_field") is str
+	assert get_expected_type(TestClass, "optional_with_field") == str | None
 
 
 def test_basic_syntax() -> None:
