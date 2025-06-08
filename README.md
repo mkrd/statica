@@ -1,4 +1,5 @@
-# Statica
+Statica
+========================================================================================
 
 ![Tests](https://github.com/mkrd/statica/actions/workflows/test.yml/badge.svg)
 ![Coverage](https://github.com/mkrd/statica/blob/main/assets/coverage.svg?raw=true)
@@ -6,7 +7,9 @@
 
 Statica is a Python library for defining and validating structured data with type annotations and constraints. It provides an easy-to-use framework for creating type-safe models with comprehensive validation for both types and constraints.
 
-## Why Statica?
+
+Why Statica?
+----------------------------------------------------------------------------------------
 
 Statica was created to address the need for a lightweight, flexible, and dependency-free alternative to libraries like pydantic.
 While pydantic is a powerful tool for data validation and parsing, Statica offers some distinct advantages in specific situations:
@@ -16,7 +19,9 @@ While pydantic is a powerful tool for data validation and parsing, Statica offer
 3. **Ease of Use**: With its simple, Pythonic design, Statica is intuitive for developers already familiar with Python's `dataclasses` and type hinting. It avoids much of the magic that pydantic employs.
 4. **Customizable Validation**: Statica allows fine-grained control over type and constraint validation through customizable field descriptors (`Field`) and error classes.
 
-## Features
+
+Features
+----------------------------------------------------------------------------------------
 
 - **Type Validation**: Automatically validates types for attributes based on type hints.
 - **Constraint Validation**: Define constraints like minimum/maximum length, value ranges, and more.
@@ -26,8 +31,11 @@ While pydantic is a powerful tool for data validation and parsing, Statica offer
 - **Automatic Initialization**: Automatically generate constructors (`__init__`) for your models.
 - **String Manipulation**: Strip whitespace from string fields if needed.
 - **Casting**: Automatically cast values to the desired type.
+- **Field Aliasing**: Support for field aliases for parsing and serialization.
 
-## Installation
+
+Installation
+----------------------------------------------------------------------------------------
 
 You can install Statica via pip:
 
@@ -35,7 +43,9 @@ You can install Statica via pip:
 pip install statica
 ```
 
-## Getting Started
+
+Getting Started
+----------------------------------------------------------------------------------------
 
 ### Basic Usage
 
@@ -141,19 +151,79 @@ except CustomError as e:
     print(e)  # Output: "num: must be at least 1"
 ```
 
-## Advanced Usage
 
-### Short Syntax for Fields
+Aliasing
+----------------------------------------------------------------------------------------
 
-You can use simple type annotations without explicitly defining `Field` descriptors:
+Statica supports field aliasing, allowing you to map different field names for parsing and serialization.
+This is particularly useful when working with external APIs that use different naming conventions.
+
+### Basic Aliases
+
+Use the `alias` parameter to define an alternative name for both parsing and serialization:
 
 ```python
-class ShortSyntax(Statica):
-    name: str
+class User(Statica):
+    full_name: str = Field(alias="fullName")
+    age: int = Field(alias="userAge")
 
-short = ShortSyntax(name="Test")
-print(short.name)  # Output: "Test"
+# Parse data with aliases
+data = {"fullName": "John Doe", "userAge": 30}
+user = User.from_map(data)
+print(user.full_name)  # Output: "John Doe"
+print(user.age)        # Output: 30
+
+# Serialize back with aliases
+result = user.to_dict()
+print(result)  # Output: {"fullName": "John Doe", "userAge": 30}
 ```
+
+### Separate Parsing and Serialization Aliases
+
+You can define different aliases for parsing and serialization:
+
+```python
+class APIModel(Statica):
+    user_name: str = Field(
+        alias_for_parsing="userName",
+        alias_for_serialization="username"
+    )
+    user_id: int = Field(alias_for_parsing="userId")
+
+# Parse from camelCase API response
+api_data = {"userName": "alice", "userId": 123}
+model = APIModel.from_map(api_data)
+
+# Serialize to snake_case for internal use
+internal_data = model.to_dict()
+print(internal_data)  # Output: {"username": "alice", "user_id": 123}
+```
+
+### Alias Priority
+
+When multiple alias types are defined, the priority is:
+1. `alias_for_parsing` for parsing operations
+2. `alias_for_serialization` for serialization operations
+3. `alias` as a fallback for both operations
+
+```python
+class PriorityExample(Statica):
+    field_name: str = Field(
+        alias="generalAlias",
+        alias_for_parsing="parseAlias",
+        alias_for_serialization="serializeAlias"
+    )
+
+# Uses alias_for_parsing
+instance = PriorityExample.from_map({"parseAlias": "value"})
+
+# Uses alias_for_serialization
+result = instance.to_dict()
+print(result)  # Output: {"serializeAlias": "value"}
+```
+
+Advanced Usage
+----------------------------------------------------------------------------------------
 
 ### Custom Initialization
 
@@ -171,7 +241,9 @@ instance = CastingExample(num="42")
 print(instance.num)  # Output: 42
 ```
 
-## Contributing
+
+Contributing
+----------------------------------------------------------------------------------------
 
 We welcome contributions to Statica! To contribute:
 
@@ -180,11 +252,14 @@ We welcome contributions to Statica! To contribute:
 3. Write tests for your changes.
 4. Submit a pull request.
 
-## License
+
+License
+----------------------------------------------------------------------------------------
 
 Statica is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
-## Acknowledgments
+
+Acknowledgments
+----------------------------------------------------------------------------------------
 
 Statica was built to simplify data validation and provide a robust and simple framework for type-safe models in Python, inspired by `pydantic` and `dataclasses`.
-
