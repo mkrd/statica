@@ -1,0 +1,97 @@
+[project]
+name = "statica"
+version = "1.0.0"
+description = "Minimalistic validation library for Python 3.11+"
+readme = "README.md"
+authors = [{ name = "Marcel Kröker", email = "kroeker.marcel@gmail.com" }]
+license = { file = "LICENSE" }
+classifiers=[
+	"Programming Language :: Python :: 3",
+	"License :: OSI Approved :: MIT License",
+	"Operating System :: OS Independent",
+	"Intended Audience :: Developers",
+	"Programming Language :: Python",
+	"Topic :: Software Development :: Libraries :: Python Modules"
+]
+requires-python = ">=3.11, <3.14"
+
+
+########################################################################################
+#### MARK: Dependencies
+
+
+dependencies = []
+
+
+[dependency-groups]
+dev = [
+	"mypy ~= 1.16.0",
+	"pytest-cov ~= 6.1.0",
+	"ruff ~= 0.11.0",
+]
+
+
+########################################################################################
+#### MARK: Packaging
+
+
+[tool.setuptools]
+packages = ["statica"]
+license-files = [] # Workaround for https://github.com/astral-sh/uv/issues/9513
+
+
+[tool.uv]
+package = true
+
+
+########################################################################################
+#### MARK: Ruff
+
+
+[tool.ruff]
+show-fixes = true
+line-length = 120
+
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+	"ANN202", # Missing return type annotation for private function
+	"ANN401", # Dynamically typed expressions (typing.Any) are disallowed
+	"D", # docstrings
+	"E501", # line length
+	"ERA001", # Found commented-out code
+	"FBT001", # Boolean-typed positional argument in function definition
+	"FIX002", # Line contains TODO, consider resolving the issue
+	"INP001", # File is part of an implicit namespace package. Add an `__init__.py`.
+	"S101", # Use of `assert` detected
+	"T201", # `print` found
+	"TD002", # Missing author in TODO; try: `# TODO(<author_name>): ...`
+	"TD003", # Missing issue link on the line following this TODO
+	"UP006", # use Dict (not possible in python 3.8)
+	"UP007", # use X | Y for union (not possible in python 3.8)
+	"UP035", # use typing Dict and List (not possible in python 3.8)
+	"W191", # indentation contains tabs
+	"PLR0913", # Too many arguments in function definition (6 > 5)
+]
+
+
+[tool.ruff.format]
+indent-style = "tab"
+quote-style = "double"
+
+
+########################################################################################
+#### MARK: Testing
+
+[tool.coverage.report]
+exclude_also = [
+	"if TYPE_CHECKING:",
+]
+
+
+########################################################################################
+#### MARK: Mypy
+
+[tool.mypy]
+ignore_missing_imports = true
