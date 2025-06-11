@@ -174,3 +174,38 @@ def test_cast() -> None:
 
 	with pytest.raises(TypeValidationError):
 		IntTest.from_map({"num": "5.5"})
+
+
+def test_nested_from_map() -> None:
+	class Inner(Statica):
+		value: str
+
+	class Outer(Statica):
+		inner: Inner
+		other: str
+
+	instance = Outer.from_map({"inner": {"value": "Test"}, "other": "Other"})
+	assert instance.inner.value == "Test"
+
+	with pytest.raises(TypeValidationError):
+		Outer.from_map({"inner": {"value": 123}})
+
+
+def test_nested_from_map_optional() -> None:
+	class Inner(Statica):
+		value: str | None
+
+	class Outer(Statica):
+		inner: Inner | None
+		other: str
+
+	instance = Outer.from_map({"inner": {"value": "Test"}, "other": "Other"})
+
+	if instance.inner is not None:
+		assert instance.inner.value == "Test"
+
+	instance = Outer.from_map({"inner": None, "other": "Other"})
+	assert instance.inner is None
+
+	with pytest.raises(TypeValidationError):
+		Outer.from_map({"inner": {"value": 123}})
