@@ -80,7 +80,7 @@ def validate_type_generic_alias(value: Any, expected_type: GenericAlias) -> None
 		if not isinstance(value, dict):
 			msg = (
 				f"expected type 'dict[{key_type.__name__}, {value_type.__name__}]'"
-				", got '{type(value).__name__}'"
+				f", got '{type(value).__name__}'"
 			)
 			raise TypeValidationError(msg)
 		for key, val in value.items():
