@@ -304,14 +304,7 @@ class Statica(metaclass=StaticaMeta):
 
 		parsed_mapping = {mapping_key_to_field_keys[k]: v for k, v in mapping.items()}
 
-		instance = cls(**parsed_mapping)
-
-		# Go through type hints and set values
-		for attribute_name in get_type_hints(instance.__class__):
-			value = parsed_mapping.get(attribute_name)
-			setattr(instance, attribute_name, value)  # Descriptor __set__ validates
-
-		return instance
+		return cls(**parsed_mapping)  # Init function will validate fields
 
 	def to_dict(self) -> dict[str, Any]:
 		"""
