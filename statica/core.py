@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
+from types import UnionType
 from typing import (
 	TYPE_CHECKING,
 	Any,
@@ -11,11 +12,10 @@ from typing import (
 	cast,
 	dataclass_transform,
 	get_type_hints,
-	overload,
 )
 
 from statica.exceptions import ConstraintValidationError, TypeValidationError
-from statica.validators import validate_constraints, validate_type
+from statica.validation import validate_constraints, validate_or_raise
 
 if TYPE_CHECKING:
 	from collections.abc import Callable, Mapping
@@ -27,15 +27,53 @@ T = TypeVar("T")
 #### MARK: Field descriptor
 
 
-@dataclass
+@dataclass(slots=True)
 class FieldDescriptor(Generic[T]):
 	"""
-	Descriptor for validated fields.
+	Descriptor for statica fields. They will be used to validate fields:
+
+	Example:
+	.. code-block:: python
+		class User(Statica):
+			name: str  # Will be initialized as FieldDescriptor during class creation
+			age: int | None = Field(min_value=0, max_value=120)
 	"""
 
-	name: str = dataclass_field(init=False, repr=False)
-	owner: type = dataclass_field(init=False, repr=False)
-	expected_type: type = dataclass_field(init=False, repr=False)
+	# Descriptor attributes
+
+	name: str = dataclass_field(init=False)
+	"""
+	Name of the field in the class.
+	Example: `"age"` for the field `age: int | None`.
+	"""
+
+	owner: type = dataclass_field(init=False)
+	"""
+	Owner class of the field descriptor.
+	Example: `<class '__main__.User'>` for the field `age: int | None`.
+	"""
+
+	expected_type: Any = dataclass_field(init=False)
+	"""
+	Expected type of the field.
+	Example 1: `int | None` (of type UnionType) for the field `age: int | None`.
+	Example 2: `<class 'int'>` for a field `number: int`.
+	"""
+
+	sub_types: tuple[type, ...] = dataclass_field(init=False, default_factory=tuple)
+	"""
+	List of types that expected_type is composed of.
+	If expected_type is not of type UnionType, then it is just a tuple with one element.
+	"""
+
+	statica_sub_class: type[Statica] | None = dataclass_field(init=False, repr=False)
+	"""
+	Statica subclass if the expected_type is a Statica subclass or a union where one
+	of the types is a Statica subclass.
+	For example, if expected_type is `Union[Statica, int]`, then this will be `Statica`.
+	"""
+
+	# User-facing dataclass fields
 
 	min_length: int | None = None
 	max_length: int | None = None
@@ -51,44 +89,79 @@ class FieldDescriptor(Generic[T]):
 	def __set_name__(self, owner: Any, name: str) -> None:
 		self.name = name
 		self.owner = owner
-		self.expected_type = owner.__annotations__.get(name)
+		self.expected_type = get_type_hints(owner)[name]
+		self.sub_types = self.get_sub_types(self.expected_type)
+		self.statica_sub_class = self.get_statica_subclass(self.sub_types)
 
-	@overload
-	def __get__(self, instance: None, owner: Any) -> FieldDescriptor[T]: ...
+	def get_sub_types(self, expected_type: Any) -> tuple[type | Any, ...]:
+		"""
+		Get all subtypes of the expected type.
+		For example, if the expected type is Union[str, int], return [str, int].
+		"""
 
-	@overload
-	def __get__(self, instance: object, owner: Any) -> T: ...
+		if type(expected_type) is UnionType:
+			return tuple(t for t in expected_type.__args__)
+
+		return (expected_type,)
+
+	def get_statica_subclass(self, sub_types: tuple[type, ...]) -> type[Statica] | None:
+		"""
+		Get the first Statica subclass from the sub_types.
+		Returns None if no Statica subclass is found.
+		"""
+
+		try:
+			for sub_type in sub_types:
+				if issubclass(sub_type, Statica):
+					return sub_type
+		except TypeError:
+			pass
+		return None
 
 	def __get__(self, instance: object | None, owner: Any) -> Any:
+		"""
+		Get the value of the field from the instance.
+		For example user.age will invoke this method.
+		"""
+
 		if instance is None:
 			return self  # Accessed on the class, return the descriptor
 		return instance.__dict__.get(self.name)
 
 	def __set__(self, instance: object, value: T) -> None:
+		"""
+		Set the value of the field on the instance.
+		For example user.age = 30 will invoke this method.
+		"""
+
 		instance.__dict__[self.name] = self.validate(value)
 
 	def validate(self, value: Any) -> Any:
 		try:
+			# (1/4) Cast to required type if cast_to is provided
+
 			if self.cast_to is not None:
 				value = self.cast_to(value)
 
-			validate_type(value, self.expected_type)
+			# (2/4) On dict assignments initialize Statica subclass if it exists
 
-			if (
-				self.min_length is not None
-				or self.max_length is not None
-				or self.min_value is not None
-				or self.max_value is not None
-				or self.strip_whitespace is not None
-			):
-				value = validate_constraints(
-					value,
-					min_length=self.min_length,
-					max_length=self.max_length,
-					min_value=self.min_value,
-					max_value=self.max_value,
-					strip_whitespace=self.strip_whitespace,
-				)
+			if self.statica_sub_class is not None and isinstance(value, dict):
+				value = self.statica_sub_class.from_map(value)
+
+			# (3/4) Validate type of the value
+
+			validate_or_raise(value, self.expected_type)
+
+			# (4/4) Validate constraints if any are set
+
+			value = validate_constraints(
+				value,
+				min_length=self.min_length,
+				max_length=self.max_length,
+				min_value=self.min_value,
+				max_value=self.max_value,
+				strip_whitespace=self.strip_whitespace,
+			)
 
 		except TypeValidationError as e:
 			msg = f"{self.name}: {e!s}"
@@ -185,11 +258,7 @@ class StaticaMeta(type):
 		# Generate custom __init__ method
 
 		def statica_init(self: Statica, **kwargs: Any) -> None:
-			for field_name, field_type in annotations.items():
-				if field_name not in kwargs and not isinstance(None, field_type):
-					msg = f"Missing required field: {field_name}"
-					raise TypeValidationError(msg)
-
+			for field_name in annotations:
 				setattr(self, field_name, kwargs.get(field_name))
 
 		namespace["__init__"] = statica_init
@@ -218,23 +287,24 @@ class StaticaMeta(type):
 class Statica(metaclass=StaticaMeta):
 	@classmethod
 	def from_map(cls, mapping: Mapping[str, Any]) -> Self:
-		mapping_key_to_field_keys = {}  # Maps alias to field name
+		# Fields might have aliases, so we need to map them correctly.
+		# Here we map the chosen alias to the original field name.
+		# If no alias is provided, we use the field name itself.
+		# Priority: parsing alias > general alias > field name
+		mapping_key_to_field_keys = {}
 
 		for field_descriptor in get_field_descriptors(cls):
 			# Use alias for parsing if it exists
-			alias = field_descriptor.alias_for_parsing or field_descriptor.alias or field_descriptor.name
+			alias = (
+				field_descriptor.alias_for_parsing
+				or field_descriptor.alias
+				or field_descriptor.name
+			)
 			mapping_key_to_field_keys[alias] = field_descriptor.name
 
 		parsed_mapping = {mapping_key_to_field_keys[k]: v for k, v in mapping.items()}
 
-		instance = cls(**parsed_mapping)
-
-		# Go through type hints and set values
-		for attribute_name in get_type_hints(instance.__class__):
-			value = parsed_mapping.get(attribute_name)
-			setattr(instance, attribute_name, value)  # Descriptor __set__ validates
-
-		return instance
+		return cls(**parsed_mapping)  # Init function will validate fields
 
 	def to_dict(self) -> dict[str, Any]:
 		"""
@@ -243,7 +313,11 @@ class Statica(metaclass=StaticaMeta):
 		result = {}
 		for field_descriptor in get_field_descriptors(self.__class__):
 			# Use alias for serialization if it exists
-			alias = field_descriptor.alias_for_serialization or field_descriptor.alias or field_descriptor.name
+			alias = (
+				field_descriptor.alias_for_serialization
+				or field_descriptor.alias
+				or field_descriptor.name
+			)
 			result[alias] = getattr(self, field_descriptor.name)
 
 		return result
@@ -253,6 +327,11 @@ class Statica(metaclass=StaticaMeta):
 #### MARK: Main
 
 if __name__ == "__main__":
+
+	class User(Statica):
+		data: dict[str, int]
+
+	u = User.from_map({})
 
 	class Payload(Statica):
 		type_error_class = ValueError

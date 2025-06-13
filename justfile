@@ -18,6 +18,11 @@ mypy:
     uv run mypy statica
 
 
+
+o:
+    uv tree --outdated --depth 1
+
+
 c:
     @just ruff
     @just mypy

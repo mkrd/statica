@@ -33,3 +33,6 @@ if __name__ == "__main__":
 		benchmark_creation(StaticaModel)
 
 	profiler.open_in_browser()
+
+	# 2025-06-09 - main - 1204ms
+	# 2025-06-09 - nested-init - 1201ms

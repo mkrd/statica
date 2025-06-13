@@ -16,5 +16,11 @@
 		"python.analysis.typeCheckingMode": "standard",
 		"python.analysis.diagnosticMode": "workspace",
 		"python.terminal.activateEnvironment": false,
+
+		// Python Testing Configuration
+
+		"python.testing.pytestArgs": ["tests"],
+		"python.testing.unittestEnabled": false,
+		"python.testing.pytestEnabled": true
 	}
 }

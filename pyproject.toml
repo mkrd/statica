@@ -51,7 +51,7 @@ package = true
 
 [tool.ruff]
 show-fixes = true
-line-length = 120
+line-length = 100
 
 
 [tool.ruff.lint]
