@@ -258,11 +258,7 @@ class StaticaMeta(type):
 		# Generate custom __init__ method
 
 		def statica_init(self: Statica, **kwargs: Any) -> None:
-			for field_name, field_type in annotations.items():
-				if field_name not in kwargs and not isinstance(None, field_type):
-					msg = f"Missing required field: {field_name}"
-					raise TypeValidationError(msg)
-
+			for field_name in annotations:
 				setattr(self, field_name, kwargs.get(field_name))
 
 		namespace["__init__"] = statica_init
@@ -338,6 +334,11 @@ class Statica(metaclass=StaticaMeta):
 #### MARK: Main
 
 if __name__ == "__main__":
+
+	class User(Statica):
+		data: dict[str, int]
+
+	u = User.from_map({})
 
 	class Payload(Statica):
 		type_error_class = ValueError
