@@ -119,6 +119,10 @@ def test_empty_alias_mapping() -> None:
 	with pytest.raises(KeyError):
 		EmptyMappingTest.from_map({"wrongAlias": "value"})
 
+	# Should raise a key error when the original field name is used
+	with pytest.raises(KeyError):
+		EmptyMappingTest.from_map({"field_name": "value"})
+
 
 def test_aliasing_with_nested_statica() -> None:
 	"""Test aliasing with nested Statica objects."""
