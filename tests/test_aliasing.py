@@ -29,28 +29,13 @@ def test_alias_for_parsing() -> None:
 	"""Test alias_for_parsing specifically."""
 
 	class ParseAliasTest(Statica):
-		user_name: str = Field(alias_for_parsing="userName")
-		user_id: int = Field(alias_for_parsing="userId")
+		user_name: str = Field(alias="userName")
+		user_id: int = Field(alias="userId")
 
 	# Test parsing with parsing alias
 	instance = ParseAliasTest.from_map({"userName": "alice", "userId": INTEGER})
 	assert instance.user_name == "alice"
 	assert instance.user_id == INTEGER
-
-
-def test_alias_priority() -> None:
-	"""Test that alias_for_parsing takes priority over general alias."""
-
-	class PriorityTest(Statica):
-		field_name: str = Field(alias="generalAlias", alias_for_parsing="parseAlias")
-
-	# Should use alias_for_parsing
-	instance = PriorityTest.from_map({"parseAlias": STRING})
-	assert instance.field_name == STRING
-
-	# General alias should not work when alias_for_parsing exists
-	with pytest.raises(KeyError):
-		PriorityTest.from_map({"generalAlias": STRING})
 
 
 def test_alias_with_optional_fields() -> None:
@@ -129,27 +114,12 @@ def test_mixed_alias_and_no_alias() -> None:
 
 def test_alias_serialization() -> None:
 	class SerializationTest(Statica):
-		field_name: str = Field(alias_for_serialization="serialAlias")
+		field_name: str = Field(alias="serialAlias")
 
 	instance = SerializationTest(field_name=STRING)
 
 	assert instance.to_dict() == {"serialAlias": STRING}
-
-
-def test_all_alias_types_together() -> None:
-	"""Test a field with all three alias types."""
-
-	class AllAliasTest(Statica):
-		field_name: str = Field(
-			alias="generalAlias",
-			alias_for_parsing="parseAlias",
-			alias_for_serialization="serializeAlias",
-		)
-
-	# Should use alias_for_parsing for parsing
-	instance = AllAliasTest.from_map({"parseAlias": STRING})
-	assert instance.field_name == STRING
-	assert instance.to_dict() == {"serializeAlias": STRING}
+	assert instance.to_dict(with_aliases=False) == {"field_name": STRING}
 
 
 def test_empty_alias_mapping() -> None:

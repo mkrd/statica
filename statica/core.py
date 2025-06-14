@@ -83,8 +83,6 @@ class FieldDescriptor(Generic[T]):
 	cast_to: Callable[..., T] | None = None
 
 	alias: str | None = None
-	alias_for_parsing: str | None = None
-	alias_for_serialization: str | None = None
 
 	def __set_name__(self, owner: Any, name: str) -> None:
 		self.name = name
@@ -209,8 +207,6 @@ def Field(  # noqa: N802
 	strip_whitespace: bool | None = None,
 	cast_to: Callable[..., T] | None = None,
 	alias: str | None = None,
-	alias_for_parsing: str | None = None,
-	alias_for_serialization: str | None = None,
 ) -> Any:
 	"""
 	Type-safe field function that returns the correct type for type checkers
@@ -225,8 +221,6 @@ def Field(  # noqa: N802
 		strip_whitespace=strip_whitespace,
 		cast_to=cast_to,
 		alias=alias,
-		alias_for_parsing=alias_for_parsing,
-		alias_for_serialization=alias_for_serialization,
 	)
 
 	if TYPE_CHECKING:
@@ -295,30 +289,25 @@ class Statica(metaclass=StaticaMeta):
 
 		for field_descriptor in get_field_descriptors(cls):
 			# Use alias for parsing if it exists
-			alias = (
-				field_descriptor.alias_for_parsing
-				or field_descriptor.alias
-				or field_descriptor.name
-			)
+			alias = field_descriptor.alias or field_descriptor.name
 			mapping_key_to_field_keys[alias] = field_descriptor.name
 
 		parsed_mapping = {mapping_key_to_field_keys[k]: v for k, v in mapping.items()}
 
 		return cls(**parsed_mapping)  # Init function will validate fields
 
-	def to_dict(self) -> dict[str, Any]:
+	def to_dict(self, *, with_aliases: bool = True) -> dict[str, Any]:
 		"""
 		Convert the instance to a dictionary, using the field names as keys.
 		"""
 		result = {}
 		for field_descriptor in get_field_descriptors(self.__class__):
-			# Use alias for serialization if it exists
-			alias = (
-				field_descriptor.alias_for_serialization
-				or field_descriptor.alias
-				or field_descriptor.name
+			key_name = (
+				field_descriptor.alias
+				if with_aliases and field_descriptor.alias is not None
+				else field_descriptor.name
 			)
-			result[alias] = getattr(self, field_descriptor.name)
+			result[key_name] = getattr(self, field_descriptor.name)
 
 		return result
 
