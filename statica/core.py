@@ -299,17 +299,30 @@ class Statica(metaclass=StaticaMeta):
 	def to_dict(self, *, with_aliases: bool = True) -> dict[str, Any]:
 		"""
 		Convert the instance to a dictionary, using the field names as keys.
+
+		Args:
+		- `with_aliases`: If True, use field aliases as keys if they exist.
+		Otherwise, use the field names.
 		"""
-		result = {}
+
+		result_dict = {}
+
 		for field_descriptor in get_field_descriptors(self.__class__):
 			key_name = (
 				field_descriptor.alias
 				if with_aliases and field_descriptor.alias is not None
 				else field_descriptor.name
 			)
-			result[key_name] = getattr(self, field_descriptor.name)
 
-		return result
+			field_value = getattr(self, field_descriptor.name)
+
+			# If the field is a Statica subclass, convert it to a dict
+			if isinstance(field_value, Statica):
+				field_value = field_value.to_dict(with_aliases=with_aliases)
+
+			result_dict[key_name] = field_value
+
+		return result_dict
 
 
 ########################################################################################

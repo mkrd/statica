@@ -25,19 +25,6 @@ def test_basic_alias() -> None:
 		AliasTest.from_map({"full_name": "John Doe", "age": INTEGER})
 
 
-def test_alias_for_parsing() -> None:
-	"""Test alias_for_parsing specifically."""
-
-	class ParseAliasTest(Statica):
-		user_name: str = Field(alias="userName")
-		user_id: int = Field(alias="userId")
-
-	# Test parsing with parsing alias
-	instance = ParseAliasTest.from_map({"userName": "alice", "userId": INTEGER})
-	assert instance.user_name == "alice"
-	assert instance.user_id == INTEGER
-
-
 def test_alias_with_optional_fields() -> None:
 	"""Test aliases with optional fields."""
 
@@ -131,3 +118,22 @@ def test_empty_alias_mapping() -> None:
 	# Should raise KeyError when the aliased field is missing
 	with pytest.raises(KeyError):
 		EmptyMappingTest.from_map({"wrongAlias": "value"})
+
+
+def test_aliasing_with_nested_statica() -> None:
+	"""Test aliasing with nested Statica objects."""
+
+	class NestedStatica(Statica):
+		nested_field: str = Field(alias="nestedField")
+
+	class AliasNestedTest(Statica):
+		nested: NestedStatica = Field(alias="nestedObject")
+
+	data = {
+		"nestedObject": {"nestedField": "nested value"},
+	}
+
+	instance = AliasNestedTest.from_map(data)
+	assert instance.nested.nested_field == "nested value"
+	assert instance.to_dict() == data
+	assert instance.to_dict(with_aliases=False) == {"nested": {"nested_field": "nested value"}}

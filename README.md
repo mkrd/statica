@@ -176,8 +176,6 @@ Aliasing
 Statica supports field aliasing, allowing you to map different field names for parsing and serialization.
 This is particularly useful when working with external APIs that use different naming conventions.
 
-### Basic Aliases
-
 Use the `alias` parameter to define an alternative name for both parsing and serialization:
 
 ```python
@@ -191,53 +189,14 @@ user = User.from_map(data)
 print(user.full_name)  # Output: "John Doe"
 print(user.age)        # Output: 30
 
-# Serialize back with aliases
+# Serialize back with aliases (uses the alias for serialization by default)
 result = user.to_dict()
 print(result)  # Output: {"fullName": "John Doe", "userAge": 30}
-```
 
-### Separate Parsing and Serialization Aliases
+# Serialize without aliases
+result_no_alias = user.to_dict(with_aliases=False)
+print(result_no_alias)  # Output: {"full_name": "John Doe", "age": 30}
 
-You can define different aliases for parsing and serialization:
-
-```python
-class APIModel(Statica):
-    user_name: str = Field(
-        alias_for_parsing="userName",
-        alias_for_serialization="username"
-    )
-    user_id: int = Field(alias_for_parsing="userId")
-
-# Parse from camelCase API response
-api_data = {"userName": "alice", "userId": 123}
-model = APIModel.from_map(api_data)
-
-# Serialize to snake_case for internal use
-internal_data = model.to_dict()
-print(internal_data)  # Output: {"username": "alice", "user_id": 123}
-```
-
-### Alias Priority
-
-When multiple alias types are defined, the priority is:
-1. `alias_for_parsing` for parsing operations
-2. `alias_for_serialization` for serialization operations
-3. `alias` as a fallback for both operations
-
-```python
-class PriorityExample(Statica):
-    field_name: str = Field(
-        alias="generalAlias",
-        alias_for_parsing="parseAlias",
-        alias_for_serialization="serializeAlias"
-    )
-
-# Uses alias_for_parsing
-instance = PriorityExample.from_map({"parseAlias": "value"})
-
-# Uses alias_for_serialization
-result = instance.to_dict()
-print(result)  # Output: {"serializeAlias": "value"}
 ```
 
 Advanced Usage
