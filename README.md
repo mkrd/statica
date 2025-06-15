@@ -219,6 +219,12 @@ print(instance.num)  # Output: 42
 ```
 
 
+Design Decisions
+----------------------------------------------------------------------------------------
+
+- [Inheritance over Decorators](docs/decision-inheritance-over-decorators.md)
+
+
 Contributing
 ----------------------------------------------------------------------------------------
 
