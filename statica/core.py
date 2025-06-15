@@ -233,7 +233,6 @@ def Field(  # noqa: N802
 #### MARK: Internal metaclass
 
 
-@dataclass_transform(kw_only_default=True)
 class StaticaMeta(type):
 	type_error_class: type[Exception] = TypeValidationError
 	constraint_error_class: type[Exception] = ConstraintValidationError
@@ -278,6 +277,7 @@ class StaticaMeta(type):
 #### MARK: Statica base class
 
 
+@dataclass_transform(kw_only_default=True)
 class Statica(metaclass=StaticaMeta):
 	@classmethod
 	def from_map(cls, mapping: Mapping[str, Any]) -> Self:
