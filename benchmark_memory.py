@@ -1,14 +1,15 @@
 import tracemalloc
 from typing import Any
 
-import statica
+# benchmark_memory.py
+from statica import Field, Statica
 
 test_data = {"name": "John Doe", "age": 30, "email": "john.doe@example.com", "salary": 75000.0}
 
 
-class StaticaModel(statica.Statica):
+class StaticaModel(Statica):
 	name: str
-	age: int
+	age: int = Field(min_value=0, max_value=120)
 	email: str
 	salary: float | None = None
 
