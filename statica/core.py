@@ -14,6 +14,7 @@ from typing import (
 	get_type_hints,
 )
 
+from statica.config import StaticaConfig, default_config
 from statica.exceptions import ConstraintValidationError, TypeValidationError
 from statica.validation import validate_constraints, validate_or_raise
 
@@ -47,7 +48,7 @@ class FieldDescriptor(Generic[T]):
 	Example: `"age"` for the field `age: int | None`.
 	"""
 
-	owner: type = dataclass_field(init=False)
+	owner: Statica = dataclass_field(init=False)
 	"""
 	Owner class of the field descriptor.
 	Example: `<class '__main__.User'>` for the field `age: int | None`.
@@ -136,6 +137,8 @@ class FieldDescriptor(Generic[T]):
 
 	def validate(self, value: Any) -> Any:
 		try:
+			config = self.owner.__config__  # type: ignore[attr-defined]
+
 			# (1/4) Cast to required type if cast_to is provided
 
 			if self.cast_to is not None:
@@ -148,7 +151,7 @@ class FieldDescriptor(Generic[T]):
 
 			# (3/4) Validate type of the value
 
-			validate_or_raise(value, self.expected_type)
+			validate_or_raise(value, self.expected_type, config=config)
 
 			# (4/4) Validate constraints if any are set
 
@@ -160,21 +163,19 @@ class FieldDescriptor(Generic[T]):
 				min_value=self.min_value,
 				max_value=self.max_value,
 				strip_whitespace=self.strip_whitespace,
+				config=config,
 			)
 
 		except TypeValidationError as e:
-			msg = f"{self.name}: {e!s}"
 			error_class = getattr(self.owner, "type_error_class", TypeValidationError)
-			raise error_class(msg) from e
+			raise error_class(str(e)) from e
 
 		except ConstraintValidationError as e:
-			msg = str(e)
 			error_class = getattr(self.owner, "constraint_error_class", ConstraintValidationError)
-			raise error_class(msg) from e
+			raise error_class(str(e)) from e
 
 		except ValueError as e:
-			msg = f"{self.name}: {e!s}"
-			raise TypeValidationError(msg) from e
+			raise TypeValidationError(str(e)) from e
 
 		return value
 
@@ -234,11 +235,20 @@ def Field(  # noqa: N802
 #### MARK: Internal metaclass
 
 
+@dataclass_transform(kw_only_default=True)
 class StaticaMeta(type):
+	__config__: StaticaConfig
 	type_error_class: type[Exception] = TypeValidationError
 	constraint_error_class: type[Exception] = ConstraintValidationError
 
-	def __new__(cls, name: str, bases: tuple, namespace: dict[str, Any]) -> type:
+	def __new__(
+		cls,
+		name: str,
+		bases: tuple,
+		namespace: dict[str, Any],
+		*,
+		config: StaticaConfig = default_config,
+	) -> type:
 		"""
 		Set up Field descriptors for each type-hinted attribute which does not have one
 		already, but only for subclasses of Statica.
@@ -246,6 +256,8 @@ class StaticaMeta(type):
 
 		if name == "Statica":
 			return super().__new__(cls, name, bases, namespace)
+
+		namespace["__config__"] = config
 
 		annotations = namespace.get("__annotations__", {})
 
@@ -278,7 +290,6 @@ class StaticaMeta(type):
 #### MARK: Statica base class
 
 
-@dataclass_transform(kw_only_default=True)
 class Statica(metaclass=StaticaMeta):
 	@classmethod
 	def from_map(cls, mapping: Mapping[str, Any]) -> Self:
@@ -330,12 +341,14 @@ class Statica(metaclass=StaticaMeta):
 #### MARK: Main
 
 if __name__ == "__main__":
+	config = StaticaConfig.create(type_error_message="!!!!")
 
-	class User(Statica):
+	class User(Statica, config=config):
 		age: int = Field(min_value=0, max_value=120)
 		data: dict[str, int] | None
 
-	u = User.from_map({"age": -1})
+	u = User.from_map({"age": "-1"})
+	u2 = User(age=30, data={"key": 42})
 
 	class Payload(Statica):
 		type_error_class = ValueError

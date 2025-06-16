@@ -18,7 +18,7 @@ from __future__ import annotations
 from types import GenericAlias, UnionType
 from typing import Any
 
-from statica.config import default_config
+from statica.config import StaticaConfig, default_config
 from statica.exceptions import ConstraintValidationError, TypeValidationError
 
 ########################################################################################
@@ -28,6 +28,7 @@ from statica.exceptions import ConstraintValidationError, TypeValidationError
 def validate_or_raise(
 	value: Any,
 	expected_type: type | UnionType | GenericAlias,
+	config: StaticaConfig = default_config,
 ) -> None:
 	"""
 	Value can be a nested structure, where all dicts with have a Statica type hint
@@ -37,13 +38,13 @@ def validate_or_raise(
 	# Handle union types
 
 	if isinstance(expected_type, UnionType):
-		validate_type_union(value, expected_type)
+		validate_type_union(value, expected_type, config)
 		return
 
 	# Handle generic aliases
 
 	if isinstance(expected_type, GenericAlias):
-		validate_type_generic_alias(value, expected_type)
+		validate_type_generic_alias(value, expected_type, config)
 		return
 
 	# Handle all other types
@@ -51,14 +52,18 @@ def validate_or_raise(
 	if isinstance(value, expected_type):
 		return
 
-	msg = default_config.type_error_message.format(
+	msg = config.type_error_message.format(
 		expected_type=expected_type.__name__,
 		found_type=type(value).__name__,
 	)
 	raise TypeValidationError(msg)
 
 
-def validate_type_union(value: Any, expected_type: UnionType) -> None:
+def validate_type_union(
+	value: Any,
+	expected_type: UnionType,
+	config: StaticaConfig = default_config,
+) -> None:
 	"""
 	Validate that the value matches one of the types in the UnionType.
 	Throws TypeValidationError if the type does not match any of the union types.
@@ -71,21 +76,25 @@ def validate_type_union(value: Any, expected_type: UnionType) -> None:
 		else:
 			return  # Exit if one of the sub-types matches
 
-	msg = default_config.type_error_message.format(
+	msg = config.type_error_message.format(
 		expected_type=expected_type.__args__,
 		found_type=type(value).__name__,
 	)
 	raise TypeValidationError(msg)
 
 
-def validate_type_generic_alias(value: Any, expected_type: GenericAlias) -> None:
+def validate_type_generic_alias(
+	value: Any,
+	expected_type: GenericAlias,
+	config: StaticaConfig = default_config,
+) -> None:
 	origin = expected_type.__origin__
 
 	if origin is dict:
 		key_type, value_type = expected_type.__args__
 
 		if not isinstance(value, dict):
-			msg = default_config.type_error_message.format(
+			msg = config.type_error_message.format(
 				expected_type=f"dict[{key_type.__name__}, {value_type.__name__}]",
 				found_type=type(value).__name__,
 			)
@@ -98,7 +107,7 @@ def validate_type_generic_alias(value: Any, expected_type: GenericAlias) -> None
 		item_type = expected_type.__args__[0]
 
 		if not isinstance(value, list):
-			msg = default_config.type_error_message.format(
+			msg = config.type_error_message.format(
 				expected_type=f"list[{item_type.__name__}]",
 				found_type=type(value).__name__,
 			)
@@ -110,7 +119,7 @@ def validate_type_generic_alias(value: Any, expected_type: GenericAlias) -> None
 		item_type = expected_type.__args__[0]
 
 		if not isinstance(value, set):
-			msg = default_config.type_error_message.format(
+			msg = config.type_error_message.format(
 				expected_type=f"set[{item_type.__name__}]",
 				found_type=type(value).__name__,
 			)
@@ -119,7 +128,7 @@ def validate_type_generic_alias(value: Any, expected_type: GenericAlias) -> None
 			validate_or_raise(item, item_type)
 
 	else:
-		msg = default_config.type_error_message.format(
+		msg = config.type_error_message.format(
 			expected_type=expected_type.__name__,
 			found_type=type(value).__name__ + " (not supported)",
 		)
@@ -138,6 +147,7 @@ def validate_constraints(
 	min_value: float | None = None,
 	max_value: float | None = None,
 	strip_whitespace: bool | None = None,
+	config: StaticaConfig = default_config,
 ) -> Any:
 	"""
 	If the value is a string, strip the whitespace if `strip_whitespace` is True.
@@ -166,13 +176,13 @@ def validate_constraints(
 
 	if isinstance(value, str | list | tuple | dict):
 		if min_length is not None and len(value) < min_length:
-			msg = default_config.min_length_error_message.format(
+			msg = config.min_length_error_message.format(
 				field_name=field_name,
 				min_length=min_length,
 			)
 			raise ConstraintValidationError(msg)
 		if max_length is not None and len(value) > max_length:
-			msg = default_config.max_length_error_message.format(
+			msg = config.max_length_error_message.format(
 				field_name=field_name,
 				max_length=max_length,
 			)
@@ -180,13 +190,13 @@ def validate_constraints(
 
 	if isinstance(value, int | float):
 		if min_value is not None and value < min_value:
-			msg = default_config.min_value_error_message.format(
+			msg = config.min_value_error_message.format(
 				field_name=field_name,
 				min_value=min_value,
 			)
 			raise ConstraintValidationError(msg)
 		if max_value is not None and value > max_value:
-			msg = default_config.max_value_error_message.format(
+			msg = config.max_value_error_message.format(
 				field_name=field_name,
 				max_value=max_value,
 			)
