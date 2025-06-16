@@ -153,6 +153,7 @@ class FieldDescriptor(Generic[T]):
 			# (4/4) Validate constraints if any are set
 
 			value = validate_constraints(
+				self.name,
 				value,
 				min_length=self.min_length,
 				max_length=self.max_length,
@@ -167,7 +168,7 @@ class FieldDescriptor(Generic[T]):
 			raise error_class(msg) from e
 
 		except ConstraintValidationError as e:
-			msg = f"{self.name}: {e!s}"
+			msg = str(e)
 			error_class = getattr(self.owner, "constraint_error_class", ConstraintValidationError)
 			raise error_class(msg) from e
 
@@ -331,9 +332,10 @@ class Statica(metaclass=StaticaMeta):
 if __name__ == "__main__":
 
 	class User(Statica):
-		data: dict[str, int]
+		age: int = Field(min_value=0, max_value=120)
+		data: dict[str, int] | None
 
-	u = User.from_map({})
+	u = User.from_map({"age": -1})
 
 	class Payload(Statica):
 		type_error_class = ValueError

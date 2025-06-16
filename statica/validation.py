@@ -18,6 +18,7 @@ from __future__ import annotations
 from types import GenericAlias, UnionType
 from typing import Any
 
+from statica.config import default_config
 from statica.exceptions import ConstraintValidationError, TypeValidationError
 
 ########################################################################################
@@ -50,7 +51,10 @@ def validate_or_raise(
 	if isinstance(value, expected_type):
 		return
 
-	msg = f"expected type '{expected_type.__name__}', got '{type(value).__name__}'"
+	msg = default_config.type_error_message.format(
+		expected_type=expected_type.__name__,
+		found_type=type(value).__name__,
+	)
 	raise TypeValidationError(msg)
 
 
@@ -67,7 +71,10 @@ def validate_type_union(value: Any, expected_type: UnionType) -> None:
 		else:
 			return  # Exit if one of the sub-types matches
 
-	msg = f"expected one of types {expected_type.__args__}, got '{type(value).__name__}'"
+	msg = default_config.type_error_message.format(
+		expected_type=expected_type.__args__,
+		found_type=type(value).__name__,
+	)
 	raise TypeValidationError(msg)
 
 
@@ -78,9 +85,9 @@ def validate_type_generic_alias(value: Any, expected_type: GenericAlias) -> None
 		key_type, value_type = expected_type.__args__
 
 		if not isinstance(value, dict):
-			msg = (
-				f"expected type 'dict[{key_type.__name__}, {value_type.__name__}]'"
-				f", got '{type(value).__name__}'"
+			msg = default_config.type_error_message.format(
+				expected_type=f"dict[{key_type.__name__}, {value_type.__name__}]",
+				found_type=type(value).__name__,
 			)
 			raise TypeValidationError(msg)
 		for key, val in value.items():
@@ -91,7 +98,10 @@ def validate_type_generic_alias(value: Any, expected_type: GenericAlias) -> None
 		item_type = expected_type.__args__[0]
 
 		if not isinstance(value, list):
-			msg = f"expected type 'list[{item_type.__name__}]', got '{type(value).__name__}'"
+			msg = default_config.type_error_message.format(
+				expected_type=f"list[{item_type.__name__}]",
+				found_type=type(value).__name__,
+			)
 			raise TypeValidationError(msg)
 		for item in value:
 			validate_or_raise(item, item_type)
@@ -100,13 +110,19 @@ def validate_type_generic_alias(value: Any, expected_type: GenericAlias) -> None
 		item_type = expected_type.__args__[0]
 
 		if not isinstance(value, set):
-			msg = f"expected type 'set[{item_type.__name__}]', got '{type(value).__name__}'"
+			msg = default_config.type_error_message.format(
+				expected_type=f"set[{item_type.__name__}]",
+				found_type=type(value).__name__,
+			)
 			raise TypeValidationError(msg)
 		for item in value:
 			validate_or_raise(item, item_type)
 
 	else:
-		msg = f"Validation for type '{expected_type}' is not supported"
+		msg = default_config.type_error_message.format(
+			expected_type=expected_type.__name__,
+			found_type=type(value).__name__ + " (not supported)",
+		)
 		raise TypeValidationError(msg)
 
 
@@ -115,6 +131,7 @@ def validate_type_generic_alias(value: Any, expected_type: GenericAlias) -> None
 
 
 def validate_constraints(
+	field_name: str,
 	value: Any,
 	min_length: int | None = None,
 	max_length: int | None = None,
@@ -149,18 +166,30 @@ def validate_constraints(
 
 	if isinstance(value, str | list | tuple | dict):
 		if min_length is not None and len(value) < min_length:
-			msg = f"length must be at least {min_length}"
+			msg = default_config.min_length_error_message.format(
+				field_name=field_name,
+				min_length=min_length,
+			)
 			raise ConstraintValidationError(msg)
 		if max_length is not None and len(value) > max_length:
-			msg = f"length must be at most {max_length}"
+			msg = default_config.max_length_error_message.format(
+				field_name=field_name,
+				max_length=max_length,
+			)
 			raise ConstraintValidationError(msg)
 
 	if isinstance(value, int | float):
 		if min_value is not None and value < min_value:
-			msg = f"must be at least {min_value}"
+			msg = default_config.min_value_error_message.format(
+				field_name=field_name,
+				min_value=min_value,
+			)
 			raise ConstraintValidationError(msg)
 		if max_value is not None and value > max_value:
-			msg = f"must be at most {max_value}"
+			msg = default_config.max_value_error_message.format(
+				field_name=field_name,
+				max_value=max_value,
+			)
 			raise ConstraintValidationError(msg)
 
 	return value

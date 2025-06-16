@@ -396,7 +396,7 @@ def test_validate_unsupported_generic_type_failure() -> None:
 	"""Test validation failure for unsupported generic types"""
 	# This would test tuple or other unsupported generic types
 	# Note: This test assumes tuple is not supported based on the code
-	with pytest.raises(TypeValidationError, match="Validation for type .* is not supported"):
+	with pytest.raises(TypeValidationError, match=".*not supported.*"):
 		validate_or_raise((1, 2, 3), tuple[int, ...])
 
 
