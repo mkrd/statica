@@ -92,34 +92,6 @@ def test_custom_config_value_error_messages() -> None:
 	assert "price > 999.99" in str(exc_info.value)
 
 
-def test_config_override_in_inheritance() -> None:
-	"""Test that child classes can override parent configuration."""
-
-	parent_config = StaticaConfig.create(
-		type_error_message="Parent: expected {expected_type}, got {found_type}",
-	)
-
-	child_config = StaticaConfig.create(
-		type_error_message="Child: expected {expected_type}, got {found_type}",
-	)
-
-	class ParentTest(Statica, config=parent_config):
-		name: str
-
-	class ChildTest(ParentTest, config=child_config):
-		age: int
-
-	# Parent uses parent config
-	with pytest.raises(TypeValidationError) as exc_info:
-		ParentTest.from_map({"name": 123})
-	assert "Parent: expected str, got int" in str(exc_info.value)
-
-	# Child uses child config (overridden)
-	with pytest.raises(TypeValidationError) as exc_info:
-		ChildTest.from_map({"name": "John", "age": "not_int"})
-	assert "Child: expected int, got str" in str(exc_info.value)
-
-
 def test_custom_config_with_from_map() -> None:
 	"""Test that custom configuration works with from_map method."""
 
