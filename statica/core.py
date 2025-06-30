@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from types import UnionType
@@ -9,9 +10,9 @@ from typing import (
 	Generic,
 	Self,
 	TypeVar,
-	cast,
 	dataclass_transform,
 	get_type_hints,
+	overload,
 )
 
 from statica.config import StaticaConfig, default_config
@@ -76,6 +77,7 @@ class FieldDescriptor(Generic[T]):
 
 	# User-facing dataclass fields
 
+	default: T | Any | None = None
 	min_length: int | None = None
 	max_length: int | None = None
 	min_value: float | None = None
@@ -116,6 +118,14 @@ class FieldDescriptor(Generic[T]):
 		except TypeError:
 			pass
 		return None
+
+	def get_default_safe(self) -> Any:
+		"""
+		Get the default value of the field, safely handling mutable defaults.
+		"""
+		if isinstance(self.default, (list, dict, set)):
+			return copy.copy(self.default)
+		return self.default
 
 	def __get__(self, instance: object | None, owner: Any) -> Any:
 		"""
@@ -200,8 +210,36 @@ def get_field_descriptors(cls: type[Statica]) -> list[FieldDescriptor]:
 #### MARK: Type-safe field function
 
 
+@overload
+def Field(
+	*,
+	default: T,  # If default is used, the return type is T
+	min_length: int | None = None,
+	max_length: int | None = None,
+	min_value: float | None = None,
+	max_value: float | None = None,
+	strip_whitespace: bool | None = None,
+	cast_to: Callable[..., T] | None = None,
+	alias: str | None = None,
+) -> T: ...
+
+
+@overload
+def Field(
+	*,  # No default provided, return type is Any
+	min_length: int | None = None,
+	max_length: int | None = None,
+	min_value: float | None = None,
+	max_value: float | None = None,
+	strip_whitespace: bool | None = None,
+	cast_to: Callable[..., T] | None = None,
+	alias: str | None = None,
+) -> Any: ...
+
+
 def Field(  # noqa: N802
 	*,
+	default: T | Any | None = None,
 	min_length: int | None = None,
 	max_length: int | None = None,
 	min_value: float | None = None,
@@ -211,11 +249,14 @@ def Field(  # noqa: N802
 	alias: str | None = None,
 ) -> Any:
 	"""
-	Type-safe field function that returns the correct type for type checkers
-	but creates a Field descriptor at runtime.
-	"""
+	Type-safe field function that provides proper type checking for default values
+	while creating a FieldDescriptor at runtime.
 
-	fd = FieldDescriptor(
+	When a default value is provided, the return type matches the default's type.
+	This prevents type mismatches like: active: bool = Field(default="yes")
+	"""
+	return FieldDescriptor(
+		default=default,
 		min_length=min_length,
 		max_length=max_length,
 		min_value=min_value,
@@ -224,11 +265,6 @@ def Field(  # noqa: N802
 		cast_to=cast_to,
 		alias=alias,
 	)
-
-	if TYPE_CHECKING:
-		return cast("Any", fd)
-
-	return fd  # type: ignore[unreachable]
 
 
 ########################################################################################
@@ -265,7 +301,14 @@ class StaticaMeta(type):
 
 		def statica_init(self: Statica, **kwargs: Any) -> None:
 			for field_name in annotations:
-				setattr(self, field_name, kwargs.get(field_name))
+				field_descriptor = namespace.get(field_name)
+				assert isinstance(field_descriptor, FieldDescriptor)
+
+				# Use default value if key is missing and default is available
+				if field_name not in kwargs and field_descriptor.default is not None:
+					setattr(self, field_name, field_descriptor.get_default_safe())
+				else:
+					setattr(self, field_name, kwargs.get(field_name))
 
 		namespace["__init__"] = statica_init
 
@@ -280,8 +323,8 @@ class StaticaMeta(type):
 				continue
 
 			# Case 3: name: str (no assignment) or name: Field[str] (no assignment)
-			# Create a default Field descriptor
-			namespace[attr_annotated] = FieldDescriptor()
+			# Create a Field descriptor with the default if it exists
+			namespace[attr_annotated] = FieldDescriptor(default=namespace.get(attr_annotated))
 
 		return super().__new__(cls, name, bases, namespace)
 
@@ -293,20 +336,16 @@ class StaticaMeta(type):
 class Statica(metaclass=StaticaMeta):
 	@classmethod
 	def from_map(cls, mapping: Mapping[str, Any]) -> Self:
-		# Fields might have aliases, so we need to map them correctly.
-		# Here we map the chosen alias to the original field name.
-		# If no alias is provided, we use the field name itself.
-		# Priority: parsing alias > general alias > field name
-		mapping_key_to_field_keys = {}
+		# Fields might have aliases, so we need to map them correctly
 
+		kwargs = {}
 		for field_descriptor in get_field_descriptors(cls):
-			# Use alias for parsing if it exists
-			alias = field_descriptor.alias or field_descriptor.name
-			mapping_key_to_field_keys[alias] = field_descriptor.name
+			expected_field_name = field_descriptor.alias or field_descriptor.name
 
-		parsed_mapping = {mapping_key_to_field_keys[k]: v for k, v in mapping.items()}
+			if expected_field_name in mapping:
+				kwargs[field_descriptor.name] = mapping[expected_field_name]
 
-		return cls(**parsed_mapping)  # Init function will validate fields
+		return cls(**kwargs)  # Init function will validate fields and set defaults
 
 	def to_dict(self, *, with_aliases: bool = True) -> dict[str, Any]:
 		"""

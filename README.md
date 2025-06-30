@@ -25,6 +25,7 @@ Features
 
 - **Type Validation**: Automatically validates types for attributes based on type hints.
 - **Constraint Validation**: Define constraints like minimum/maximum length, value ranges, and more.
+- **Default Field Values**: Set default values for fields that are used when not explicitly provided.
 - **Customizable Error Handling**: Use custom exception classes for type and constraint errors.
 - **Flexible Field Descriptors**: Add constraints, casting, and other behaviors to your fields.
 - **Optional Fields**: Support for optional fields with default values.
@@ -116,13 +117,92 @@ payload = OptionalPayload()
 print(payload.name)  # Output: None
 ```
 
+### Default Field Values
+
+You can specify default values for fields in two ways:
+
+#### Using Field() with default parameter
+
+```python
+class User(Statica):
+    name: str
+    age: int = Field(default=25)
+    active: bool = Field(default=True)
+
+# Using direct initialization
+user = User(name="John")
+print(user.name)    # Output: "John"
+print(user.age)     # Output: 25
+print(user.active)  # Output: True
+
+# Using from_map
+user = User.from_map({"name": "Jane"})
+print(user.age)     # Output: 25 (default used)
+
+# Explicit values override defaults
+user = User(name="Bob", age=30, active=False)
+print(user.age)     # Output: 30
+```
+
+#### Direct assignment (without Field)
+
+You can also assign default values directly to fields without using `Field()`:
+
+```python
+class Config(Statica):
+    name: str
+    timeout: float = 30.0      # Direct assignment
+    retries: int = 3           # Direct assignment
+    debug: bool = False        # Direct assignment
+
+config = Config(name="server")
+print(config.timeout)  # Output: 30.0
+print(config.retries)   # Output: 3
+print(config.debug)     # Output: False
+
+# Works with from_map too
+config = Config.from_map({"name": "api-server"})
+print(config.timeout)  # Output: 30.0 (default used)
+```
+
+Both approaches work identically and can be mixed within the same class. Use `Field(default=...)` when you need additional constraints or options, and direct assignment for simple defaults.
+
+#### Validation and Safety
+
+Default values are validated against any constraints you've defined:
+
+```python
+class Config(Statica):
+    timeout: float = Field(default=30.0, min_value=1.0, max_value=120.0)
+    retries: int = Field(default=3, min_value=1)
+
+config = Config()  # Uses defaults: timeout=30.0, retries=3
+```
+
+For mutable default values (like lists, dicts, sets), Statica automatically creates copies to prevent shared state issues:
+
+```python
+class UserProfile(Statica):
+    name: str
+    tags: list[str] = Field(default=[])  # or tags: list[str] = []
+
+user1 = UserProfile(name="Alice")
+user2 = UserProfile(name="Bob")
+
+user1.tags.append("admin")
+print(user1.tags)  # Output: ["admin"]
+print(user2.tags)  # Output: [] (not affected)
+```
+
 ### Field Constraints
 
-You can specify constraints on fields:
+You can specify constraints and options on fields:
 
+- **Default Values**: `default` (using `Field()`) or direct assignment
 - **String Constraints**: `min_length`, `max_length`, `strip_whitespace`
 - **Numeric Constraints**: `min_value`, `max_value`
 - **Casting**: `cast_to`
+- **Aliasing**: `alias`
 
 ```python
 class StringTest(Statica):
@@ -130,6 +210,15 @@ class StringTest(Statica):
 
 class IntTest(Statica):
     num: int = Field(min_value=1, max_value=10, cast_to=int)
+
+class DefaultTest(Statica):
+    # Using Field() for defaults with constraints
+    status: str = Field(default="active")
+    priority: int = Field(default=1, min_value=1, max_value=5)
+    
+    # Direct assignment for simple defaults
+    timeout: float = 30.0
+    retries: int = 3
 ```
 
 ### Custom Error Classes
@@ -181,21 +270,21 @@ Use the `alias` parameter to define an alternative name for both parsing and ser
 ```python
 class User(Statica):
     full_name: str = Field(alias="fullName")
-    age: int = Field(alias="userAge")
+    age: int = Field(alias="userAge", default=25)
 
 # Parse data with aliases
-data = {"fullName": "John Doe", "userAge": 30}
+data = {"fullName": "John Doe"}  # userAge not provided, uses default
 user = User.from_map(data)
 print(user.full_name)  # Output: "John Doe"
-print(user.age)        # Output: 30
+print(user.age)        # Output: 25
 
 # Serialize back with aliases (uses the alias for serialization by default)
 result = user.to_dict()
-print(result)  # Output: {"fullName": "John Doe", "userAge": 30}
+print(result)  # Output: {"fullName": "John Doe", "userAge": 25}
 
 # Serialize without aliases
 result_no_alias = user.to_dict(with_aliases=False)
-print(result_no_alias)  # Output: {"full_name": "John Doe", "age": 30}
+print(result_no_alias)  # Output: {"full_name": "John Doe", "age": 25}
 
 ```
 
