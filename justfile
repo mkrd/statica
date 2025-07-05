@@ -15,7 +15,7 @@ ruff:
 
 
 mypy:
-    uv run mypy statica
+    uv run mypy .
 
 
 

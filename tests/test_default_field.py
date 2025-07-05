@@ -100,7 +100,7 @@ def test_default_with_casting() -> None:
 
 	class User(Statica):
 		name: str
-		age: int = Field(default=f"{age_default}", cast_to=int)
+		age: int = Field(default=age_default, cast_to=int)
 
 	user = User(name="John")
 	assert user.name == "John"
