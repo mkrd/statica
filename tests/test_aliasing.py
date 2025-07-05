@@ -21,7 +21,7 @@ def test_basic_alias() -> None:
 	assert instance.to_dict() == data
 
 	# Test that original field names don't work when alias is used
-	with pytest.raises(KeyError):
+	with pytest.raises(TypeValidationError):
 		AliasTest.from_map({"full_name": "John Doe", "age": INTEGER})
 
 
@@ -115,12 +115,12 @@ def test_empty_alias_mapping() -> None:
 	class EmptyMappingTest(Statica):
 		field_name: str = Field(alias="expectedAlias")
 
-	# Should raise KeyError when the aliased field is missing
-	with pytest.raises(KeyError):
+	# Should raise TypeValidationError when the aliased field is missing
+	with pytest.raises(TypeValidationError):
 		EmptyMappingTest.from_map({"wrongAlias": "value"})
 
-	# Should raise a key error when the original field name is used
-	with pytest.raises(KeyError):
+	# Should raise a TypeValidationError when the original field name is used
+	with pytest.raises(TypeValidationError):
 		EmptyMappingTest.from_map({"field_name": "value"})
 
 
