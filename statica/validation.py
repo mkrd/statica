@@ -1,6 +1,16 @@
 """
 The backus naur grammar for types is as follows:
-T ::= Statica | int | float | str | None | (T1 | T2) | list[T] | set[T] | dict[T1, T2]
+T ::= Statica
+	| int
+	| float
+	| str
+	| None
+	| (T1 | T2)
+	| list[T]
+	| set[T]
+	| dict[T1, T2]
+	| Literal[V1, ...]
+
 
 Where:
 - Statica: A class that inherits from Statica
