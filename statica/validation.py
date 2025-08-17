@@ -16,14 +16,36 @@ function, because `isinstance` does not support generic aliases directly.
 from __future__ import annotations
 
 from types import GenericAlias, UnionType
-from typing import (
-	Any,
-	_LiteralGenericAlias,  # type: ignore[attr-defined]
-	_UnionGenericAlias,  # type: ignore[attr-defined]
-)
+from typing import Any, Literal, TypeGuard, Union
 
 from statica.config import StaticaConfig, default_config
 from statica.exceptions import ConstraintValidationError, TypeValidationError
+
+########################################################################################
+#### MARK: Types
+
+
+class LiteralGenericAlias:
+	"""A type used in place of typing._LiteralGenericAlias to avoid private imports."""
+
+	__origin__ = Literal
+	__args__: tuple[Any, ...]
+
+
+def is_literal_generic_alias(expected_type: Any) -> TypeGuard[LiteralGenericAlias]:
+	return hasattr(expected_type, "__origin__") and expected_type.__origin__ is Literal
+
+
+class UnionGenericAlias:
+	"""A type used in place of typing._UnionGenericAlias to avoid private imports."""
+
+	__origin__ = Union
+	__args__: tuple[Any, ...]
+
+
+def is_union_generic_alias(expected_type: Any) -> TypeGuard[UnionGenericAlias]:
+	return hasattr(expected_type, "__origin__") and expected_type.__origin__ is Union
+
 
 ########################################################################################
 #### MARK: Type Validation
@@ -39,28 +61,28 @@ def validate_or_raise(
 	are already initialized Statica objects.
 	"""
 
-	# Handle union types
-
-	if isinstance(expected_type, UnionType):
-		validate_type_union(value, expected_type, config)
-		return
-
-	# Handle union generic aliases
-
-	if isinstance(expected_type, _UnionGenericAlias):
-		validate_type_union_generic_alias(value, expected_type, config)
-		return
-
-	# Handle generic aliases
+	# Handle generic aliases if native python types, e.g. list[int], dict[str, int]
 
 	if isinstance(expected_type, GenericAlias):
 		validate_type_generic_alias(value, expected_type, config)
 		return
 
+	# Handle parameterized generic types
+
+	if is_union_generic_alias(expected_type):
+		validate_type_union_generic_alias(value, expected_type, config)
+		return
+
 	# Handle Literal (e.g. Literal["a", "b"], with any number and type of values)
 
-	if isinstance(expected_type, _LiteralGenericAlias):
+	if is_literal_generic_alias(expected_type):
 		validate_literal(value, expected_type)
+		return
+
+	# Handle union types
+
+	if isinstance(expected_type, UnionType):
+		validate_type_union(value, expected_type, config)
 		return
 
 	# Handle all other types
@@ -77,7 +99,7 @@ def validate_or_raise(
 
 def validate_literal(
 	value: Any,
-	expected_type: _LiteralGenericAlias,
+	expected_type: LiteralGenericAlias,
 ) -> None:
 	"""
 	Validate that the value matches one of the literals in the expected_type.
@@ -114,7 +136,7 @@ def validate_type_union(
 
 def validate_type_union_generic_alias(
 	value: Any,
-	expected_type: _UnionGenericAlias,
+	expected_type: UnionGenericAlias,
 	config: StaticaConfig = default_config,
 ) -> None:
 	"""
