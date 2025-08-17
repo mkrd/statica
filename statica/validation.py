@@ -1,6 +1,16 @@
 """
 The backus naur grammar for types is as follows:
-T ::= Statica | int | float | str | None | (T1 | T2) | list[T] | set[T] | dict[T1, T2]
+T ::= Statica
+	| int
+	| float
+	| str
+	| None
+	| (T1 | T2)
+	| list[T]
+	| set[T]
+	| dict[T1, T2]
+	| Literal[V1, ...]
+
 
 Where:
 - Statica: A class that inherits from Statica
@@ -16,10 +26,36 @@ function, because `isinstance` does not support generic aliases directly.
 from __future__ import annotations
 
 from types import GenericAlias, UnionType
-from typing import Any
+from typing import Any, Literal, TypeGuard, Union
 
 from statica.config import StaticaConfig, default_config
 from statica.exceptions import ConstraintValidationError, TypeValidationError
+
+########################################################################################
+#### MARK: Types
+
+
+class LiteralGenericAlias:
+	"""A type used in place of typing._LiteralGenericAlias to avoid private imports."""
+
+	__origin__ = Literal
+	__args__: tuple[Any, ...]
+
+
+def is_literal_generic_alias(expected_type: Any) -> TypeGuard[LiteralGenericAlias]:
+	return hasattr(expected_type, "__origin__") and expected_type.__origin__ is Literal
+
+
+class UnionGenericAlias:
+	"""A type used in place of typing._UnionGenericAlias to avoid private imports."""
+
+	__origin__ = Union
+	__args__: tuple[Any, ...]
+
+
+def is_union_generic_alias(expected_type: Any) -> TypeGuard[UnionGenericAlias]:
+	return hasattr(expected_type, "__origin__") and expected_type.__origin__ is Union
+
 
 ########################################################################################
 #### MARK: Type Validation
@@ -35,16 +71,28 @@ def validate_or_raise(
 	are already initialized Statica objects.
 	"""
 
+	# Handle generic aliases if native python types, e.g. list[int], dict[str, int]
+
+	if isinstance(expected_type, GenericAlias):
+		validate_type_generic_alias(value, expected_type, config)
+		return
+
+	# Handle parameterized generic types
+
+	if is_union_generic_alias(expected_type):
+		validate_type_union_generic_alias(value, expected_type, config)
+		return
+
+	# Handle Literal (e.g. Literal["a", "b"], with any number and type of values)
+
+	if is_literal_generic_alias(expected_type):
+		validate_literal(value, expected_type)
+		return
+
 	# Handle union types
 
 	if isinstance(expected_type, UnionType):
 		validate_type_union(value, expected_type, config)
-		return
-
-	# Handle generic aliases
-
-	if isinstance(expected_type, GenericAlias):
-		validate_type_generic_alias(value, expected_type, config)
 		return
 
 	# Handle all other types
@@ -59,6 +107,19 @@ def validate_or_raise(
 	raise TypeValidationError(msg)
 
 
+def validate_literal(
+	value: Any,
+	expected_type: LiteralGenericAlias,
+) -> None:
+	"""
+	Validate that the value matches one of the literals in the expected_type.
+	Throws TypeValidationError if the value is not one of the literals.
+	"""
+	if value not in expected_type.__args__:
+		msg = f"expected one of {expected_type.__args__}, got '{value}'"
+		raise TypeValidationError(msg)
+
+
 def validate_type_union(
 	value: Any,
 	expected_type: UnionType,
@@ -71,6 +132,30 @@ def validate_type_union(
 	for sub_type in expected_type.__args__:
 		try:
 			validate_or_raise(value, sub_type)
+		except TypeValidationError:
+			continue  # Try the next sub-type
+		else:
+			return  # Exit if one of the sub-types matches
+
+	msg = config.type_error_message.format(
+		expected_type=expected_type.__args__,
+		found_type=type(value).__name__,
+	)
+	raise TypeValidationError(msg)
+
+
+def validate_type_union_generic_alias(
+	value: Any,
+	expected_type: UnionGenericAlias,
+	config: StaticaConfig = default_config,
+) -> None:
+	"""
+	Validate that the value matches one of the types in the UnionGenericAlias.
+	Throws TypeValidationError if the type does not match any of the union types.
+	"""
+	for sub_type in expected_type.__args__:
+		try:
+			validate_or_raise(value, sub_type, config)
 		except TypeValidationError:
 			continue  # Try the next sub-type
 		else:

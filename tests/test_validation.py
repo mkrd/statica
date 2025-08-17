@@ -1,3 +1,5 @@
+from typing import Literal
+
 import pytest
 
 from statica import Field, Statica, TypeValidationError
@@ -98,3 +100,39 @@ def test_validate_unsupported_generic_alias() -> None:
 
 	with pytest.raises(TypeValidationError):
 		UnsupportedGeneric(data=frozenset([1, 2, 3]))
+
+
+def test_validate_literal() -> None:
+	class LiteralTest(Statica):
+		data: Literal["a", "b", "c"]
+		number: Literal[1, 2, 3]
+
+	i1 = LiteralTest.from_map({"data": "a", "number": 1})
+	assert i1.data == "a"
+	assert i1.number == 1
+
+	with pytest.raises(TypeValidationError):
+		LiteralTest.from_map({"data": "d", "number": 1})
+
+	with pytest.raises(TypeValidationError):
+		LiteralTest.from_map({"data": "a", "number": 4})
+
+
+def test_validate_literal_optional() -> None:
+	class LiteralTest(Statica):
+		data: Literal["a", "b", "c"] | None
+		number: Literal[1, 2, 3] | None
+
+	i1 = LiteralTest.from_map({"data": "a", "number": 1})
+	assert i1.data == "a"
+	assert i1.number == 1
+
+	i2 = LiteralTest.from_map({"data": None, "number": None})
+	assert i2.data is None
+	assert i2.number is None
+
+	with pytest.raises(TypeValidationError):
+		LiteralTest.from_map({"data": "d", "number": 1})
+
+	with pytest.raises(TypeValidationError):
+		LiteralTest.from_map({"data": "a", "number": 4})
