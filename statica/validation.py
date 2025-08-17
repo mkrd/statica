@@ -16,7 +16,11 @@ function, because `isinstance` does not support generic aliases directly.
 from __future__ import annotations
 
 from types import GenericAlias, UnionType
-from typing import Any
+from typing import (
+	Any,
+	_LiteralGenericAlias,  # type: ignore[attr-defined]
+	_UnionGenericAlias,  # type: ignore[attr-defined]
+)
 
 from statica.config import StaticaConfig, default_config
 from statica.exceptions import ConstraintValidationError, TypeValidationError
@@ -41,10 +45,22 @@ def validate_or_raise(
 		validate_type_union(value, expected_type, config)
 		return
 
+	# Handle union generic aliases
+
+	if isinstance(expected_type, _UnionGenericAlias):
+		validate_type_union_generic_alias(value, expected_type, config)
+		return
+
 	# Handle generic aliases
 
 	if isinstance(expected_type, GenericAlias):
 		validate_type_generic_alias(value, expected_type, config)
+		return
+
+	# Handle Literal (e.g. Literal["a", "b"], with any number and type of values)
+
+	if isinstance(expected_type, _LiteralGenericAlias):
+		validate_literal(value, expected_type)
 		return
 
 	# Handle all other types
@@ -59,6 +75,19 @@ def validate_or_raise(
 	raise TypeValidationError(msg)
 
 
+def validate_literal(
+	value: Any,
+	expected_type: _LiteralGenericAlias,
+) -> None:
+	"""
+	Validate that the value matches one of the literals in the expected_type.
+	Throws TypeValidationError if the value is not one of the literals.
+	"""
+	if value not in expected_type.__args__:
+		msg = f"expected one of {expected_type.__args__}, got '{value}'"
+		raise TypeValidationError(msg)
+
+
 def validate_type_union(
 	value: Any,
 	expected_type: UnionType,
@@ -71,6 +100,30 @@ def validate_type_union(
 	for sub_type in expected_type.__args__:
 		try:
 			validate_or_raise(value, sub_type)
+		except TypeValidationError:
+			continue  # Try the next sub-type
+		else:
+			return  # Exit if one of the sub-types matches
+
+	msg = config.type_error_message.format(
+		expected_type=expected_type.__args__,
+		found_type=type(value).__name__,
+	)
+	raise TypeValidationError(msg)
+
+
+def validate_type_union_generic_alias(
+	value: Any,
+	expected_type: _UnionGenericAlias,
+	config: StaticaConfig = default_config,
+) -> None:
+	"""
+	Validate that the value matches one of the types in the UnionGenericAlias.
+	Throws TypeValidationError if the type does not match any of the union types.
+	"""
+	for sub_type in expected_type.__args__:
+		try:
+			validate_or_raise(value, sub_type, config)
 		except TypeValidationError:
 			continue  # Try the next sub-type
 		else:
