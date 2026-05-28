@@ -154,7 +154,10 @@ def test_user_profile_rejects_short_email() -> None:
 class PageMeta(Statica):
 	current_page: int = Field(alias="page", default=DEFAULT_PAGE, min_value=1)
 	page_size: int = Field(
-		alias="pageSize", default=DEFAULT_PAGE_SIZE, min_value=1, max_value=MAX_PAGE_SIZE,
+		alias="pageSize",
+		default=DEFAULT_PAGE_SIZE,
+		min_value=1,
+		max_value=MAX_PAGE_SIZE,
 	)
 	total_items: int = Field(alias="totalItems", min_value=0)
 

@@ -11,7 +11,8 @@ test:
 
 
 ruff:
-    uv run ruff check .
+    uv run ruff format .
+    uv run ruff check . --fix
 
 
 mypy:

@@ -66,6 +66,7 @@ ignore = [
 	"T201", # `print` found
 	"W191", # indentation contains tabs
 	"PLR0913", # Too many arguments in function definition (6 > 5)
+	"COM812", # Missing trailing comma
 ]
 
 

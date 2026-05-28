@@ -104,7 +104,9 @@ def test_descriptor_constraint_metadata() -> None:
 
 	class Model(Statica):
 		name: str = Field(
-			min_length=NAME_MIN_LENGTH, max_length=NAME_MAX_LENGTH, strip_whitespace=True,
+			min_length=NAME_MIN_LENGTH,
+			max_length=NAME_MAX_LENGTH,
+			strip_whitespace=True,
 		)
 		age: int = Field(min_value=AGE_MIN_VALUE, max_value=AGE_MAX_VALUE)
 
