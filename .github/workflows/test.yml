@@ -4,11 +4,15 @@ on: [push, pull_request]
 permissions:
   contents: write
 
+env:
+  UV_CACHE_DIR: /tmp/uv-cache
+
 jobs:
 
-  # JOB: Tests
+  # MARK: Tests job
+
   tests-job:
-    runs-on: ubuntu-latest
+    runs-on: alpine-uv
 
     strategy:
       matrix:
@@ -16,14 +20,17 @@ jobs:
 
     steps:
       #----------------------------------------------
-      #---- Checkout and install uv and python
+      #---- Checkout and set up Python
       #----------------------------------------------
 
-      - uses: actions/checkout@v4
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
+      - name: Install git
+        run: apk add --no-cache git nodejs
+
+      - name: Checkout repository
+        run: |
+          git clone --depth 1 --branch ${GITHUB_REF#refs/heads/} ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git .
+          git checkout $GITHUB_SHA
+
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
@@ -46,7 +53,6 @@ jobs:
         run: ls -lah
       - name: uv tree
         run: uv tree
-
 
       #----------------------------------------------
       #---- Linting and Static Analysis
@@ -73,20 +79,29 @@ jobs:
       #----------------------------------------------
 
       - name: Show artifacts (ls -lah)
+        if: matrix.python-version == '3.12'
         run: ls -lah
       - uses: actions/upload-artifact@v3
+        if: matrix.python-version == '3.12'
         with:
-          name: coverage-${{ matrix.python-version }}
+          name: coverage-3.12
           include-hidden-files: true
           if-no-files-found: error
           path: ".coverage"
 
-  # JOB: Coverage Badge
+  # MARK: Badge Job
+
   cov-badge-job:
     needs: tests-job
-    runs-on: ubuntu-latest
+    runs-on: alpine-uv
     steps:
-      - uses: actions/checkout@v4
+      - name: Install git
+        run: apk add --no-cache git nodejs
+
+      - name: Checkout repository
+        run: |
+          git clone --depth 1 --branch ${GITHUB_REF#refs/heads/} ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git .
+          git checkout $GITHUB_SHA
 
       #----------------------------------------------
       #---- Download and debug artifact
@@ -97,34 +112,37 @@ jobs:
           name: coverage-3.12
           path: .
 
-
       #----------------------------------------------
       #---- Generate coverage badge
       #----------------------------------------------
 
       - name: Generate Coverage Badge
-        uses: tj-actions/coverage-badge-py@v2
-        with:
-          output: assets/coverage.svg
+        run: |
+          ls -la .coverage* || echo "No .coverage file found"
+          uv run --with coverage --with genbadge[coverage] -- coverage xml
+          uv run --with coverage --with genbadge[coverage] -- genbadge coverage -i coverage.xml -o assets/coverage.svg
+          head -5 assets/coverage.svg
 
       #----------------------------------------------
-      #---- Verify and commit changes
+      #---- Commit and push if changed
       #----------------------------------------------
 
-      - name: Verify Changed Files
-        uses: tj-actions/verify-changed-files@v17
-        id: changed_files
-        with:
-          files: assets/coverage.svg
-
-      - name: Commit Files
-        if: steps.changed_files.outputs.files_changed == 'true'
+      - name: Check if coverage badge changed
+        id: badge-diff
         run: |
           git add assets/coverage.svg
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push coverage badge
+        if: steps.badge-diff.outputs.changed == 'true'
+        run: |
+          git config user.name "actions[bot]"
+          git config user.email "actions[bot]@users.noreply.com"
           git commit -m "Updated assets/coverage.svg"
-      - name: Push Changes
-        if: steps.changed_files.outputs.files_changed == 'true'
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.github_token }}
-          branch: ${{ github.ref }}
+          git -c http.extraheader="Authorization: token ${GITHUB_TOKEN}" push origin HEAD:${GITHUB_REF}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

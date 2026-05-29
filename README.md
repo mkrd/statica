@@ -1,8 +1,8 @@
 Statica
 ========================================================================================
 
-![Tests](https://github.com/mkrd/statica/actions/workflows/test.yml/badge.svg)
-![Coverage](https://github.com/mkrd/statica/blob/main/assets/coverage.svg?raw=true)
+![Tests](https://git.budgetflow.cc/mkrd/statica/actions/workflows/test.yml/badge.svg)
+![Coverage](https://git.budgetflow.cc/mkrd/statica/raw/branch/main/assets/coverage.svg)
 
 
 Statica is a Python library for defining and validating structured data with type annotations and constraints. It provides an easy-to-use framework for creating type-safe models with comprehensive validation for both types and constraints.
@@ -215,7 +215,7 @@ class DefaultTest(Statica):
     # Using Field() for defaults with constraints
     status: str = Field(default="active")
     priority: int = Field(default=1, min_value=1, max_value=5)
-    
+
     # Direct assignment for simple defaults
     timeout: float = 30.0
     retries: int = 3
