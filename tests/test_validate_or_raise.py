@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from statica.core import Field, Statica
@@ -343,7 +345,7 @@ def test_validate_complex_union_with_generics_failure() -> None:
 def test_validate_deeply_nested_success() -> None:
 	"""Test successful deeply nested structure validation"""
 	# list[dict[str, list[dict[str, int]]]]
-	data = [
+	data: list[dict[str, Any]] = [
 		{"group1": [{"item1": 1, "item2": 2}, {"item3": 3}], "group2": []},
 		{"group3": [{"item4": 4}]},
 	]
@@ -396,7 +398,7 @@ def test_validate_unsupported_generic_type_failure() -> None:
 	"""Test validation failure for unsupported generic types"""
 	# This would test tuple or other unsupported generic types
 	# Note: This test assumes tuple is not supported based on the code
-	with pytest.raises(TypeValidationError, match=".*not supported.*"):
+	with pytest.raises(TypeValidationError, match=r".*not supported.*"):
 		validate_or_raise((1, 2, 3), tuple[int, ...])
 
 
@@ -634,7 +636,7 @@ def test_validate_mixed_generic_with_statica_success() -> None:
 	user1 = User(name="John", age=30, email="john@example.com")
 	user2 = User(name="Jane", age=25, email="jane@example.com")
 
-	data = {"team1": [user1], "team2": [user2], "team3": []}
+	data: dict[str, list[User]] = {"team1": [user1], "team2": [user2], "team3": []}
 	validate_or_raise(data, dict[str, list[User]])
 
 

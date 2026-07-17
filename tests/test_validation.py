@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 import pytest
 
@@ -7,7 +7,7 @@ from statica import Field, Statica, TypeValidationError
 
 def test_dict_as_field() -> None:
 	class DictTest(Statica):
-		data: dict
+		data: dict[str, Any]
 
 	test_dict = {"key1": 1, "key2": 2}
 

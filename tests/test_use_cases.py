@@ -6,7 +6,7 @@ objects, optional fields, from_map, to_dict, Literal, collections, custom
 error classes).
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 import pytest
 
@@ -197,7 +197,7 @@ def test_paginated_response_happy_path() -> None:
 
 
 def test_paginated_response_defaults() -> None:
-	raw = {"meta": {"totalItems": 0}, "items": []}
+	raw: dict[str, Any] = {"meta": {"totalItems": 0}, "items": []}
 	resp = ProductListResponse.from_map(raw)
 	assert resp.meta.current_page == DEFAULT_PAGE
 	assert resp.meta.page_size == DEFAULT_PAGE_SIZE
@@ -205,7 +205,7 @@ def test_paginated_response_defaults() -> None:
 
 
 def test_paginated_response_rejects_oversized_page() -> None:
-	raw = {"meta": {"pageSize": 500, "totalItems": 10}, "items": []}
+	raw: dict[str, Any] = {"meta": {"pageSize": 500, "totalItems": 10}, "items": []}
 	with pytest.raises(ConstraintValidationError):
 		ProductListResponse.from_map(raw)
 
@@ -267,7 +267,7 @@ def test_order_uses_default_currency() -> None:
 
 
 def test_order_rejects_invalid_status() -> None:
-	raw = {
+	raw: dict[str, Any] = {
 		"orderId": "ORD-BAD",
 		"status": "refunded",
 		"items": [],
@@ -570,7 +570,7 @@ def test_api_error_validation_type() -> None:
 
 
 def test_api_error_rejects_invalid_status_code() -> None:
-	raw = {"status": 999, "errorType": "server", "details": []}
+	raw: dict[str, Any] = {"status": 999, "errorType": "server", "details": []}
 	with pytest.raises(ConstraintValidationError):
 		ApiErrorResponse.from_map(raw)
 

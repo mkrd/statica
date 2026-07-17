@@ -15,8 +15,8 @@ ruff:
     uv run ruff check . --fix
 
 
-mypy:
-    uv run mypy .
+typecheck:
+    uv run pyrefly check . --no-progress-bar
 
 
 
@@ -26,7 +26,7 @@ o:
 
 c:
     @just ruff
-    @just mypy
+    @just typecheck
     @just test
 
 

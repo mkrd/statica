@@ -24,6 +24,34 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
+try:
+	from annotationlib import Format, call_annotate_function, get_annotate_from_class_namespace
+except ImportError:  # Python < 3.14 has no annotationlib
+	Format, call_annotate_function, get_annotate_from_class_namespace = None, None, None
+
+
+def _get_class_annotations(namespace: dict[str, Any]) -> dict[str, Any]:
+	"""
+	Retrieve the annotations declared in a class body from its namespace.
+
+	Python 3.14 (PEP 749) no longer stores `__annotations__` in the class
+	namespace during metaclass creation; the annotate function must instead be
+	retrieved via `annotationlib.get_annotate_from_class_namespace`, since the
+	key it is stored under in the namespace is an implementation detail. This
+	helper supports both the old and new behavior.
+	"""
+
+	if (
+		Format is not None
+		and call_annotate_function is not None
+		and get_annotate_from_class_namespace is not None
+	):
+		annotate = get_annotate_from_class_namespace(namespace)
+		if annotate is not None:
+			return call_annotate_function(annotate, Format.FORWARDREF)
+
+	return namespace.get("__annotations__", {})
+
 
 ########################################################################################
 #### MARK: Field descriptor
@@ -49,7 +77,7 @@ class FieldDescriptor(Generic[T]):
 	Example: `"age"` for the field `age: int | None`.
 	"""
 
-	owner: Statica = dataclass_field(init=False)
+	owner: type[Statica] = dataclass_field(init=False)
 	"""
 	Owner class of the field descriptor.
 	Example: `<class '__main__.User'>` for the field `age: int | None`.
@@ -190,20 +218,17 @@ class FieldDescriptor(Generic[T]):
 		return value
 
 
-def get_field_descriptors(cls: type[Statica]) -> list[FieldDescriptor]:
+def get_field_descriptors(cls: type[Statica]) -> list[FieldDescriptor[Any]]:
 	"""
 	Get all Field descriptors for a class.
 	Returns a list of FieldDescriptor instances.
+
+	The list is computed once by the metaclass at class-creation time and
+	cached as `__field_descriptors__`, so repeated calls (e.g. from `from_map`
+	or `to_dict`) don't need to rescan the class namespace.
 	"""
 
-	descriptors = []
-
-	for field_name in cls.__annotations__:
-		field_descriptor = getattr(cls, field_name)
-		assert isinstance(field_descriptor, FieldDescriptor)
-		descriptors.append(field_descriptor)
-
-	return descriptors
+	return cls.__field_descriptors__  # type: ignore[attr-defined]
 
 
 ########################################################################################
@@ -274,13 +299,14 @@ def Field(  # noqa: N802
 @dataclass_transform(kw_only_default=True)
 class StaticaMeta(type):
 	__config__: StaticaConfig
+	__field_descriptors__: list[FieldDescriptor[Any]]
 	type_error_class: type[Exception] = TypeValidationError
 	constraint_error_class: type[Exception] = ConstraintValidationError
 
 	def __new__(
 		cls,
 		name: str,
-		bases: tuple,
+		bases: tuple[type, ...],
 		namespace: dict[str, Any],
 		*,
 		config: StaticaConfig = default_config,
@@ -295,7 +321,7 @@ class StaticaMeta(type):
 
 		namespace["__config__"] = config
 
-		annotations = namespace.get("__annotations__", {})
+		annotations = _get_class_annotations(namespace)
 
 		# Generate custom __init__ method
 
@@ -314,7 +340,7 @@ class StaticaMeta(type):
 
 		# Set up Field descriptors for type-hinted attributes
 
-		for attr_annotated in namespace.get("__annotations__", {}):
+		for attr_annotated in annotations:
 			existing_value = namespace.get(attr_annotated)
 
 			if isinstance(existing_value, FieldDescriptor):
@@ -325,6 +351,12 @@ class StaticaMeta(type):
 			# Case 3: name: str (no assignment) or name: Field[str] (no assignment)
 			# Create a Field descriptor with the default if it exists
 			namespace[attr_annotated] = FieldDescriptor(default=namespace.get(attr_annotated))
+
+		# Cache the list of Field descriptors so get_field_descriptors() doesn't need
+		# to rescan the class namespace on every call
+		namespace["__field_descriptors__"] = [
+			namespace[attr_annotated] for attr_annotated in annotations
+		]
 
 		return super().__new__(cls, name, bases, namespace)
 

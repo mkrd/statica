@@ -71,6 +71,11 @@ def validate_or_raise(
 	are already initialized Statica objects.
 	"""
 
+	# Handle typing.Any, which accepts any value
+
+	if expected_type is Any:
+		return
+
 	# Handle generic aliases if native python types, e.g. list[int], dict[str, int]
 
 	if isinstance(expected_type, GenericAlias):
@@ -227,6 +232,7 @@ def validate_type_generic_alias(
 def validate_constraints(
 	field_name: str,
 	value: Any,
+	*,
 	min_length: int | None = None,
 	max_length: int | None = None,
 	min_value: float | None = None,
@@ -259,7 +265,7 @@ def validate_constraints(
 	if strip_whitespace and isinstance(value, str):
 		value = value.strip()
 
-	if isinstance(value, str | list | tuple | dict):
+	if isinstance(value, (str, list, tuple, dict)):
 		if min_length is not None and len(value) < min_length:
 			msg = config.min_length_error_message.format(
 				field_name=field_name,
