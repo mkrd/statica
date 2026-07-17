@@ -64,8 +64,8 @@ jobs:
       - name: 🔎 Ruff format checks
         run: uv run ruff format --check .
 
-      - name: 🐍 Mypy Static Type Checker
-        run: uv run mypy .
+      - name: 🐍 Static Type Checker
+        run: uv run pyrefly check . --no-progress-bar
 
       #----------------------------------------------
       #---- Run tests with coverage report
