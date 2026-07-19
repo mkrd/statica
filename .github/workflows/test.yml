@@ -97,11 +97,7 @@ jobs:
         run: apk add --no-cache git nodejs
 
       - name: Checkout repository
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git -c http.extraheader="Authorization: token ${GITHUB_TOKEN}" clone --depth 1 --branch ${GITHUB_REF#refs/heads/} ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git .
-          git checkout $GITHUB_SHA
+        uses: actions/checkout@v7
 
       #----------------------------------------------
       #---- Download and debug artifact
