@@ -2,7 +2,7 @@ name: Tests
 on: [push, pull_request]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
 
@@ -89,7 +89,8 @@ jobs:
   cov-badge-job:
     needs: tests-job
     runs-on: alpine-uv
-    # Only run this job on push to main branch
+    permissions:
+      contents: write
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Install git
