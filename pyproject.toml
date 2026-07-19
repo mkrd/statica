@@ -22,7 +22,6 @@ requires-python = ">=3.11, <3.15"
 
 dependencies = []
 
-
 [dependency-groups]
 dev = [
 	"pyrefly ~= 1.1.0",
@@ -40,7 +39,6 @@ dev = [
 packages = ["statica"]
 license-files = [] # Workaround for https://github.com/astral-sh/uv/issues/9513
 
-
 [tool.uv]
 package = true
 
@@ -52,7 +50,6 @@ package = true
 [tool.ruff]
 show-fixes = true
 line-length = 100
-
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -69,7 +66,6 @@ ignore = [
 	"COM812", # Missing trailing comma
 ]
 
-
 [tool.ruff.format]
 indent-style = "tab"
 quote-style = "double"
@@ -77,6 +73,7 @@ quote-style = "double"
 
 ########################################################################################
 #### MARK: Testing
+
 
 [tool.coverage.report]
 omit = [
@@ -91,8 +88,7 @@ exclude_also = [
 ########################################################################################
 #### MARK: Pyrefly
 
+
 [tool.pyrefly]
-python-version = "3.14"
 preset = "strict"
-search_path = ["."]
 min-severity = "warn"
