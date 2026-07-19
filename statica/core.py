@@ -25,10 +25,10 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 try:
-	from annotationlib import (  # type: ignore[missing-module-attribute]
-		Format,
-		call_annotate_function,
-		get_annotate_from_class_namespace,
+	from annotationlib import (
+		Format,  # type: ignore[missing-module-attribute]
+		call_annotate_function,  # type: ignore[missing-module-attribute]
+		get_annotate_from_class_namespace,  # type: ignore[missing-module-attribute]
 	)
 except ImportError:  # Python < 3.14 has no annotationlib
 	Format, call_annotate_function, get_annotate_from_class_namespace = None, None, None
