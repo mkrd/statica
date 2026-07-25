@@ -32,15 +32,15 @@ dev = [
 
 
 ########################################################################################
-#### MARK: Packaging
+#### MARK: Build System
 
 
-[tool.setuptools]
-packages = ["statica"]
-license-files = [] # Workaround for https://github.com/astral-sh/uv/issues/9513
+[build-system]
+requires = ["uv_build>=0.11.32,<0.12.0"]
+build-backend = "uv_build"
 
-[tool.uv]
-package = true
+[tool.uv.build-backend]
+module-root = ""
 
 
 ########################################################################################
