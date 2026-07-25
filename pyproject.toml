@@ -13,12 +13,13 @@ classifiers=[
 	"Programming Language :: Python",
 	"Topic :: Software Development :: Libraries :: Python Modules"
 ]
-requires-python = ">=3.11, <3.15"
 
 
 ########################################################################################
 #### MARK: Dependencies
 
+
+requires-python = ">=3.11, <3.15"
 
 dependencies = []
 
