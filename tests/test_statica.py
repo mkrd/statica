@@ -200,3 +200,14 @@ class TestStatica(unittest.TestCase):
 
 		with self.assertRaises(TypeValidationError):
 			Outer.from_map({"inner": {"value": 123}})
+
+	def test_class_without_fields(self) -> None:
+		class Empty(Statica):
+			pass
+
+		instance = Empty.from_map({})
+		self.assertIsInstance(instance, Empty)
+		self.assertEqual(instance.to_dict(), {})
+
+		instance = Empty()
+		self.assertEqual(instance.to_dict(), {})
