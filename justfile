@@ -54,7 +54,8 @@ typecheck:
 
 alias t := test
 test:
-	uv run coverage run -m pytest
+	uv run coverage run -m unittest discover
+	uv run coverage report
 
 
 alias c := check

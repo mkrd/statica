@@ -6,9 +6,8 @@ objects, optional fields, from_map, to_dict, Literal, collections, custom
 error classes).
 """
 
+import unittest
 from typing import Any, Literal
-
-import pytest
 
 from statica import Field, Statica, TypeValidationError
 from statica.config import StaticaConfig
@@ -74,77 +73,6 @@ class UserProfile(Statica):
 	address: Address | None = Field(default=None, alias="homeAddress")
 
 
-def test_user_profile_full_payload() -> None:
-	payload = {
-		"firstName": "  Alice  ",
-		"lastName": "  Smith  ",
-		"userAge": 30,
-		"emailAddress": "alice@example.com",
-		"role": "admin",
-		"biography": "Loves Python",
-		"homeAddress": {
-			"streetAddress": " 123 Main St ",
-			"cityName": " Berlin ",
-			"zipCode": "10115",
-			"countryCode": "DE",
-		},
-	}
-
-	user = UserProfile.from_map(payload)
-	assert user.first_name == "Alice"
-	assert user.last_name == "Smith"
-	assert user.address is not None
-	assert user.address.city == "Berlin"
-	assert user.role == "admin"
-
-	# Round-trip preserves aliases
-	serialized = user.to_dict()
-	assert serialized["firstName"] == "Alice"
-	assert serialized["homeAddress"]["cityName"] == "Berlin"
-
-	user2 = UserProfile.from_map(serialized)
-	assert user2.first_name == user.first_name
-	assert user2.address is not None
-	assert user2.address.zip_code == user.address.zip_code
-
-
-def test_user_profile_minimal_payload_uses_defaults() -> None:
-	payload = {
-		"firstName": "Bob",
-		"lastName": "Jones",
-		"userAge": 25,
-		"emailAddress": "bob@example.com",
-	}
-
-	user = UserProfile.from_map(payload)
-	assert user.role == DEFAULT_ROLE
-	assert user.bio is None
-	assert user.address is None
-
-
-def test_user_profile_rejects_invalid_role() -> None:
-	payload = {
-		"firstName": "Eve",
-		"lastName": "Hacker",
-		"userAge": 99,
-		"emailAddress": "eve@example.com",
-		"role": "superadmin",
-	}
-	with pytest.raises(TypeValidationError):
-		UserProfile.from_map(payload)
-
-
-def test_user_profile_rejects_short_email() -> None:
-	payload = {
-		"firstName": "X",
-		"lastName": "Y",
-		"userAge": 20,
-		"emailAddress": "a@b",
-	}
-	with pytest.raises(ConstraintValidationError):
-		UserProfile.from_map(payload)
-
-
 # ---------------------------------------------------------------------------
 # 2. Paginated API response — generics (list), defaults, value constraints,
 #    aliases, nested Statica in a list, to_dict round-trip
@@ -174,42 +102,6 @@ class ProductListResponse(Statica):
 	items: list[str]  # serialised product SKUs for the lightweight endpoint
 
 
-def test_paginated_response_happy_path() -> None:
-	raw = {
-		"meta": {"page": 2, "pageSize": 10, "totalItems": 55},
-		"items": ["SKU-001", "SKU-002", "SKU-003"],
-	}
-	resp = ProductListResponse.from_map(raw)
-	page_num = 2
-	page_size = 10
-	total_items = 55
-	item_count = 3
-
-	assert resp.meta.current_page == page_num
-	assert resp.meta.page_size == page_size
-	assert resp.meta.total_items == total_items
-	assert len(resp.items) == item_count
-
-	# Serialize and verify aliases come back
-	out = resp.to_dict()
-	assert out["meta"]["page"] == page_num
-	assert out["meta"]["pageSize"] == page_size
-
-
-def test_paginated_response_defaults() -> None:
-	raw: dict[str, Any] = {"meta": {"totalItems": 0}, "items": []}
-	resp = ProductListResponse.from_map(raw)
-	assert resp.meta.current_page == DEFAULT_PAGE
-	assert resp.meta.page_size == DEFAULT_PAGE_SIZE
-	assert resp.items == []
-
-
-def test_paginated_response_rejects_oversized_page() -> None:
-	raw: dict[str, Any] = {"meta": {"pageSize": 500, "totalItems": 10}, "items": []}
-	with pytest.raises(ConstraintValidationError):
-		ProductListResponse.from_map(raw)
-
-
 # ---------------------------------------------------------------------------
 # 3. E-commerce order — multiple nested models, cast_to, constraints,
 #    Literal status, optional discount, to_dict without aliases
@@ -229,65 +121,6 @@ class Order(Statica):
 	items: list[str]  # product names as a flat list for the summary view
 	discount_percent: float | None = Field(alias="discountPercent", default=None)
 	notes: str | None = Field(default=None, strip_whitespace=True)
-
-
-def test_order_creation_and_serialization() -> None:
-	raw = {
-		"orderId": "ORD-2026-001",
-		"status": "pending",
-		"currency": "USD",
-		"items": ["Widget A", "Widget B"],
-		"discountPercent": DISCOUNT_PERCENT,
-		"notes": "  rush delivery  ",
-	}
-
-	order = Order.from_map(raw)
-	assert order.order_id == "ORD-2026-001"
-	assert order.status == "pending"
-	assert order.notes == "rush delivery"
-	assert order.discount_percent == DISCOUNT_PERCENT
-
-	# Serialize without aliases → Python field names
-	flat = order.to_dict(with_aliases=False)
-	assert "order_id" in flat
-	assert "orderId" not in flat
-	assert flat["notes"] == "rush delivery"
-
-
-def test_order_uses_default_currency() -> None:
-	raw = {
-		"orderId": "ORD-2026-002",
-		"status": "paid",
-		"items": ["Gadget X"],
-	}
-	order = Order.from_map(raw)
-	assert order.currency == DEFAULT_CURRENCY
-	assert order.discount_percent is None
-	assert order.notes is None
-
-
-def test_order_rejects_invalid_status() -> None:
-	raw: dict[str, Any] = {
-		"orderId": "ORD-BAD",
-		"status": "refunded",
-		"items": [],
-	}
-	with pytest.raises(TypeValidationError):
-		Order.from_map(raw)
-
-
-def test_order_item_casts_quantity() -> None:
-	raw = {"productName": "Bolt", "unitPrice": 0.99, "qty": "12"}
-	item = OrderItem.from_map(raw)
-	quantity = 12
-	assert item.quantity == quantity
-	assert isinstance(item.quantity, int)
-
-
-def test_order_item_rejects_zero_quantity() -> None:
-	raw = {"productName": "Bolt", "unitPrice": 0.99, "qty": 0}
-	with pytest.raises(ConstraintValidationError):
-		OrderItem.from_map(raw)
 
 
 # ---------------------------------------------------------------------------
@@ -316,53 +149,6 @@ class WebhookEndpoint(Statica):
 	secret: str | None = Field(default=None, alias="signingSecret")
 
 
-def test_webhook_full_config() -> None:
-	raw = {
-		"callbackUrl": "https://hooks.example.com/events",
-		"method": "POST",
-		"headers": {"Authorization": "Bearer tok_123", "X-Custom": "value"},
-		"retryCount": 5,
-		"signingSecret": "whsec_abc123",
-	}
-	hook = WebhookEndpoint.from_map(raw)
-	retry_count = 5
-	assert hook.url == "https://hooks.example.com/events"
-	assert hook.retry_count == retry_count
-	assert hook.headers["Authorization"] == "Bearer tok_123"
-	expected_secret = "whsec_abc123"  # noqa: S105
-	assert hook.secret == expected_secret
-
-
-def test_webhook_defaults() -> None:
-	raw = {"callbackUrl": "https://hooks.example.com/events"}
-	hook = WebhookEndpoint.from_map(raw)
-	assert hook.method == "POST"
-	assert hook.headers == {}
-	assert hook.retry_count == WEBHOOK_RETRY_COUNT
-	assert hook.secret is None
-
-
-def test_webhook_mutable_default_isolation() -> None:
-	raw = {"callbackUrl": "https://hooks.example.com/a"}
-	hook1 = WebhookEndpoint.from_map(raw)
-	hook2 = WebhookEndpoint.from_map(raw)
-
-	hook1.headers["X-Trace"] = "trace-1"
-	assert "X-Trace" not in hook2.headers
-
-
-def test_webhook_raises_domain_error_on_bad_type() -> None:
-	raw = {"callbackUrl": 42}  # wrong type
-	with pytest.raises(WebhookError):
-		WebhookEndpoint.from_map(raw)
-
-
-def test_webhook_raises_domain_error_on_short_url() -> None:
-	raw = {"callbackUrl": "http://x"}
-	with pytest.raises(WebhookError):
-		WebhookEndpoint.from_map(raw)
-
-
 # ---------------------------------------------------------------------------
 # 5. IoT sensor reading — typed dict, union fields, cast_to, custom config
 #    error messages, set field
@@ -389,77 +175,6 @@ class SensorReading(Statica, config=sensor_config):
 	metadata: dict[str, str] = Field(default={})
 
 
-def test_sensor_reading_full() -> None:
-	raw = {
-		"sensorId": "sensor-42",
-		"reading_type": "temperature",
-		"value": SENSOR_TEMP,
-		"unit": "°C",
-		"tags": ["indoor", "lab", "indoor"],
-		"location": {"lat": LAT_BERLIN, "lon": LON_BERLIN},
-		"metadata": {"firmware": "v2.1"},
-	}
-	reading = SensorReading.from_map(raw)
-
-	assert reading.sensor_id == "sensor-42"
-	assert reading.value == SENSOR_TEMP
-	assert reading.tags == {"indoor", "lab"}  # deduplicated via cast_to=set
-	assert reading.location is not None
-	assert reading.location.lat == LAT_BERLIN
-	assert reading.metadata["firmware"] == "v2.1"
-
-	serialized = reading.to_dict()
-	assert serialized["sensorId"] == "sensor-42"
-
-
-def test_sensor_reading_minimal() -> None:
-	raw = {
-		"sensorId": "sensor-99",
-		"reading_type": "humidity",
-		"value": SENSOR_HUMIDITY,
-		"unit": "%",
-	}
-	reading = SensorReading.from_map(raw)
-	assert reading.tags == set()
-	assert reading.location is None
-	assert reading.metadata == {}
-
-
-def test_sensor_reading_rejects_bad_reading_type() -> None:
-	raw = {
-		"sensorId": "sensor-1",
-		"reading_type": "noise",
-		"value": 50,
-		"unit": "dB",
-	}
-	with pytest.raises(TypeValidationError):
-		SensorReading.from_map(raw)
-
-
-def test_sensor_custom_error_message() -> None:
-	raw = {
-		"sensorId": 123,  # wrong type
-		"reading_type": "temperature",
-		"value": 20,
-		"unit": "°C",
-	}
-	with pytest.raises(TypeValidationError, match="Sensor validation"):
-		SensorReading.from_map(raw)
-
-
-def test_sensor_metadata_isolation() -> None:
-	raw = {
-		"sensorId": "s-1",
-		"reading_type": "pressure",
-		"value": 1013,
-		"unit": "hPa",
-	}
-	r1 = SensorReading.from_map(raw)
-	r2 = SensorReading.from_map(raw)
-	r1.metadata["calibrated"] = "yes"
-	assert "calibrated" not in r2.metadata
-
-
 # ---------------------------------------------------------------------------
 # 6. Multi-step form wizard — demonstrates mutating an instance after creation
 #    and that descriptors re-validate on every __set__
@@ -473,46 +188,6 @@ class RegistrationForm(Statica):
 
 
 TEST_PASSWORD = "Str0ng!Pass"  # noqa: S105
-
-
-def test_registration_form_valid_flow() -> None:
-	form = RegistrationForm(
-		username="  alice_dev  ",
-		password=TEST_PASSWORD,
-		accepted_terms=True,
-	)
-	assert form.username == "alice_dev"
-
-	# Mutate after creation — descriptor should re-validate
-	form.username = "bob_dev"
-	assert form.username == "bob_dev"
-
-
-def test_registration_form_rejects_mutation_violating_constraint() -> None:
-	form = RegistrationForm(
-		username="alice",
-		password=TEST_PASSWORD,
-		accepted_terms=True,
-	)
-
-	with pytest.raises(ConstraintValidationError):
-		form.username = "ab"  # too short
-
-	# Original value unchanged
-	assert form.username == "alice"
-
-
-def test_registration_form_rejects_mutation_wrong_type() -> None:
-	form = RegistrationForm(
-		username="alice",
-		password=TEST_PASSWORD,
-		accepted_terms=True,
-	)
-
-	with pytest.raises(TypeValidationError):
-		form.accepted_terms = "yes"  # type: ignore[assignment]
-
-	assert form.accepted_terms is True
 
 
 # ---------------------------------------------------------------------------
@@ -535,55 +210,354 @@ class ApiErrorResponse(Statica):
 	request_id: str | None = Field(alias="requestId", default=None)
 
 
-def test_api_error_response_full() -> None:
-	raw = {
-		"status": HTTP_NOT_FOUND,
-		"errorType": "not_found",
-		"details": ["Resource /users/999 not found"],
-		"requestId": "req-abc-123",
-	}
+class TestUseCases(unittest.TestCase):
+	def test_user_profile_full_payload(self) -> None:
+		payload = {
+			"firstName": "  Alice  ",
+			"lastName": "  Smith  ",
+			"userAge": 30,
+			"emailAddress": "alice@example.com",
+			"role": "admin",
+			"biography": "Loves Python",
+			"homeAddress": {
+				"streetAddress": " 123 Main St ",
+				"cityName": " Berlin ",
+				"zipCode": "10115",
+				"countryCode": "DE",
+			},
+		}
 
-	err = ApiErrorResponse.from_map(raw)
-	assert err.status == HTTP_NOT_FOUND
-	assert err.error_type == "not_found"
-	assert len(err.details) == 1
-	assert err.request_id == "req-abc-123"
+		user = UserProfile.from_map(payload)
+		self.assertEqual(user.first_name, "Alice")
+		self.assertEqual(user.last_name, "Smith")
+		self.assertIsNotNone(user.address)
+		self.assertEqual(user.address.city, "Berlin")
+		self.assertEqual(user.role, "admin")
 
-	# Round-trip
-	out = err.to_dict()
-	err2 = ApiErrorResponse.from_map(out)
-	assert err2.status == err.status
-	assert err2.details == err.details
+		# Round-trip preserves aliases
+		serialized = user.to_dict()
+		self.assertEqual(serialized["firstName"], "Alice")
+		self.assertEqual(serialized["homeAddress"]["cityName"], "Berlin")
 
+		user2 = UserProfile.from_map(serialized)
+		self.assertEqual(user2.first_name, user.first_name)
+		self.assertIsNotNone(user2.address)
+		self.assertEqual(user2.address.zip_code, user.address.zip_code)
 
-def test_api_error_validation_type() -> None:
-	raw = {
-		"status": HTTP_OK,
-		"errorType": "validation",
-		"details": ["name is required", "email is invalid"],
-	}
+	def test_user_profile_minimal_payload_uses_defaults(self) -> None:
+		payload = {
+			"firstName": "Bob",
+			"lastName": "Jones",
+			"userAge": 25,
+			"emailAddress": "bob@example.com",
+		}
 
-	err = ApiErrorResponse.from_map(raw)
-	detail_count = 2
-	assert len(err.details) == detail_count
-	assert err.request_id is None
+		user = UserProfile.from_map(payload)
+		self.assertEqual(user.role, DEFAULT_ROLE)
+		self.assertIsNone(user.bio)
+		self.assertIsNone(user.address)
 
+	def test_user_profile_rejects_invalid_role(self) -> None:
+		payload = {
+			"firstName": "Eve",
+			"lastName": "Hacker",
+			"userAge": 99,
+			"emailAddress": "eve@example.com",
+			"role": "superadmin",
+		}
+		with self.assertRaises(TypeValidationError):
+			UserProfile.from_map(payload)
 
-def test_api_error_rejects_invalid_status_code() -> None:
-	raw: dict[str, Any] = {"status": 999, "errorType": "server", "details": []}
-	with pytest.raises(ConstraintValidationError):
-		ApiErrorResponse.from_map(raw)
+	def test_user_profile_rejects_short_email(self) -> None:
+		payload = {
+			"firstName": "X",
+			"lastName": "Y",
+			"userAge": 20,
+			"emailAddress": "a@b",
+		}
+		with self.assertRaises(ConstraintValidationError):
+			UserProfile.from_map(payload)
 
+	def test_paginated_response_happy_path(self) -> None:
+		raw = {
+			"meta": {"page": 2, "pageSize": 10, "totalItems": 55},
+			"items": ["SKU-001", "SKU-002", "SKU-003"],
+		}
+		resp = ProductListResponse.from_map(raw)
+		page_num = 2
+		page_size = 10
+		total_items = 55
+		item_count = 3
 
-def test_error_detail_with_optional_code() -> None:
-	raw_with = {"field": "email", "msg": "Invalid format", "code": "E1001"}
-	detail = ErrorDetail.from_map(raw_with)
-	assert detail.error_code == "E1001"
+		self.assertEqual(resp.meta.current_page, page_num)
+		self.assertEqual(resp.meta.page_size, page_size)
+		self.assertEqual(resp.meta.total_items, total_items)
+		self.assertEqual(len(resp.items), item_count)
 
-	raw_without = {"field": "name", "msg": "Required"}
-	detail2 = ErrorDetail.from_map(raw_without)
-	assert detail2.error_code is None
+		# Serialize and verify aliases come back
+		out = resp.to_dict()
+		self.assertEqual(out["meta"]["page"], page_num)
+		self.assertEqual(out["meta"]["pageSize"], page_size)
 
-	# to_dict uses aliases
-	assert detail.to_dict() == {"field": "email", "msg": "Invalid format", "code": "E1001"}
-	assert detail2.to_dict() == {"field": "name", "msg": "Required", "code": None}
+	def test_paginated_response_defaults(self) -> None:
+		raw: dict[str, Any] = {"meta": {"totalItems": 0}, "items": []}
+		resp = ProductListResponse.from_map(raw)
+		self.assertEqual(resp.meta.current_page, DEFAULT_PAGE)
+		self.assertEqual(resp.meta.page_size, DEFAULT_PAGE_SIZE)
+		self.assertEqual(resp.items, [])
+
+	def test_paginated_response_rejects_oversized_page(self) -> None:
+		raw: dict[str, Any] = {"meta": {"pageSize": 500, "totalItems": 10}, "items": []}
+		with self.assertRaises(ConstraintValidationError):
+			ProductListResponse.from_map(raw)
+
+	def test_order_creation_and_serialization(self) -> None:
+		raw = {
+			"orderId": "ORD-2026-001",
+			"status": "pending",
+			"currency": "USD",
+			"items": ["Widget A", "Widget B"],
+			"discountPercent": DISCOUNT_PERCENT,
+			"notes": "  rush delivery  ",
+		}
+
+		order = Order.from_map(raw)
+		self.assertEqual(order.order_id, "ORD-2026-001")
+		self.assertEqual(order.status, "pending")
+		self.assertEqual(order.notes, "rush delivery")
+		self.assertEqual(order.discount_percent, DISCOUNT_PERCENT)
+
+		# Serialize without aliases → Python field names
+		flat = order.to_dict(with_aliases=False)
+		self.assertIn("order_id", flat)
+		self.assertNotIn("orderId", flat)
+		self.assertEqual(flat["notes"], "rush delivery")
+
+	def test_order_uses_default_currency(self) -> None:
+		raw = {
+			"orderId": "ORD-2026-002",
+			"status": "paid",
+			"items": ["Gadget X"],
+		}
+		order = Order.from_map(raw)
+		self.assertEqual(order.currency, DEFAULT_CURRENCY)
+		self.assertIsNone(order.discount_percent)
+		self.assertIsNone(order.notes)
+
+	def test_order_rejects_invalid_status(self) -> None:
+		raw: dict[str, Any] = {
+			"orderId": "ORD-BAD",
+			"status": "refunded",
+			"items": [],
+		}
+		with self.assertRaises(TypeValidationError):
+			Order.from_map(raw)
+
+	def test_order_item_casts_quantity(self) -> None:
+		raw = {"productName": "Bolt", "unitPrice": 0.99, "qty": "12"}
+		item = OrderItem.from_map(raw)
+		quantity = 12
+		self.assertEqual(item.quantity, quantity)
+		self.assertIsInstance(item.quantity, int)
+
+	def test_order_item_rejects_zero_quantity(self) -> None:
+		raw = {"productName": "Bolt", "unitPrice": 0.99, "qty": 0}
+		with self.assertRaises(ConstraintValidationError):
+			OrderItem.from_map(raw)
+
+	def test_webhook_full_config(self) -> None:
+		raw = {
+			"callbackUrl": "https://hooks.example.com/events",
+			"method": "POST",
+			"headers": {"Authorization": "Bearer tok_123", "X-Custom": "value"},
+			"retryCount": 5,
+			"signingSecret": "whsec_abc123",
+		}
+		hook = WebhookEndpoint.from_map(raw)
+		retry_count = 5
+		self.assertEqual(hook.url, "https://hooks.example.com/events")
+		self.assertEqual(hook.retry_count, retry_count)
+		self.assertEqual(hook.headers["Authorization"], "Bearer tok_123")
+		expected_secret = "whsec_abc123"  # noqa: S105
+		self.assertEqual(hook.secret, expected_secret)
+
+	def test_webhook_defaults(self) -> None:
+		raw = {"callbackUrl": "https://hooks.example.com/events"}
+		hook = WebhookEndpoint.from_map(raw)
+		self.assertEqual(hook.method, "POST")
+		self.assertEqual(hook.headers, {})
+		self.assertEqual(hook.retry_count, WEBHOOK_RETRY_COUNT)
+		self.assertIsNone(hook.secret)
+
+	def test_webhook_mutable_default_isolation(self) -> None:
+		raw = {"callbackUrl": "https://hooks.example.com/a"}
+		hook1 = WebhookEndpoint.from_map(raw)
+		hook2 = WebhookEndpoint.from_map(raw)
+
+		hook1.headers["X-Trace"] = "trace-1"
+		self.assertNotIn("X-Trace", hook2.headers)
+
+	def test_webhook_raises_domain_error_on_bad_type(self) -> None:
+		raw = {"callbackUrl": 42}  # wrong type
+		with self.assertRaises(WebhookError):
+			WebhookEndpoint.from_map(raw)
+
+	def test_webhook_raises_domain_error_on_short_url(self) -> None:
+		raw = {"callbackUrl": "http://x"}
+		with self.assertRaises(WebhookError):
+			WebhookEndpoint.from_map(raw)
+
+	def test_sensor_reading_full(self) -> None:
+		raw = {
+			"sensorId": "sensor-42",
+			"reading_type": "temperature",
+			"value": SENSOR_TEMP,
+			"unit": "°C",
+			"tags": ["indoor", "lab", "indoor"],
+			"location": {"lat": LAT_BERLIN, "lon": LON_BERLIN},
+			"metadata": {"firmware": "v2.1"},
+		}
+		reading = SensorReading.from_map(raw)
+
+		self.assertEqual(reading.sensor_id, "sensor-42")
+		self.assertEqual(reading.value, SENSOR_TEMP)
+		self.assertEqual(reading.tags, {"indoor", "lab"})  # deduplicated via cast_to=set
+		self.assertIsNotNone(reading.location)
+		self.assertEqual(reading.location.lat, LAT_BERLIN)
+		self.assertEqual(reading.metadata["firmware"], "v2.1")
+
+		serialized = reading.to_dict()
+		self.assertEqual(serialized["sensorId"], "sensor-42")
+
+	def test_sensor_reading_minimal(self) -> None:
+		raw = {
+			"sensorId": "sensor-99",
+			"reading_type": "humidity",
+			"value": SENSOR_HUMIDITY,
+			"unit": "%",
+		}
+		reading = SensorReading.from_map(raw)
+		self.assertEqual(reading.tags, set())
+		self.assertIsNone(reading.location)
+		self.assertEqual(reading.metadata, {})
+
+	def test_sensor_reading_rejects_bad_reading_type(self) -> None:
+		raw = {
+			"sensorId": "sensor-1",
+			"reading_type": "noise",
+			"value": 50,
+			"unit": "dB",
+		}
+		with self.assertRaises(TypeValidationError):
+			SensorReading.from_map(raw)
+
+	def test_sensor_custom_error_message(self) -> None:
+		raw = {
+			"sensorId": 123,  # wrong type
+			"reading_type": "temperature",
+			"value": 20,
+			"unit": "°C",
+		}
+		with self.assertRaisesRegex(TypeValidationError, "Sensor validation"):
+			SensorReading.from_map(raw)
+
+	def test_sensor_metadata_isolation(self) -> None:
+		raw = {
+			"sensorId": "s-1",
+			"reading_type": "pressure",
+			"value": 1013,
+			"unit": "hPa",
+		}
+		r1 = SensorReading.from_map(raw)
+		r2 = SensorReading.from_map(raw)
+		r1.metadata["calibrated"] = "yes"
+		self.assertNotIn("calibrated", r2.metadata)
+
+	def test_registration_form_valid_flow(self) -> None:
+		form = RegistrationForm(
+			username="  alice_dev  ",
+			password=TEST_PASSWORD,
+			accepted_terms=True,
+		)
+		self.assertEqual(form.username, "alice_dev")
+
+		# Mutate after creation — descriptor should re-validate
+		form.username = "bob_dev"
+		self.assertEqual(form.username, "bob_dev")
+
+	def test_registration_form_rejects_mutation_violating_constraint(self) -> None:
+		form = RegistrationForm(
+			username="alice",
+			password=TEST_PASSWORD,
+			accepted_terms=True,
+		)
+
+		with self.assertRaises(ConstraintValidationError):
+			form.username = "ab"  # too short
+
+		# Original value unchanged
+		self.assertEqual(form.username, "alice")
+
+	def test_registration_form_rejects_mutation_wrong_type(self) -> None:
+		form = RegistrationForm(
+			username="alice",
+			password=TEST_PASSWORD,
+			accepted_terms=True,
+		)
+
+		with self.assertRaises(TypeValidationError):
+			form.accepted_terms = "yes"  # type: ignore[assignment]
+
+		self.assertTrue(form.accepted_terms)
+
+	def test_api_error_response_full(self) -> None:
+		raw = {
+			"status": HTTP_NOT_FOUND,
+			"errorType": "not_found",
+			"details": ["Resource /users/999 not found"],
+			"requestId": "req-abc-123",
+		}
+
+		err = ApiErrorResponse.from_map(raw)
+		self.assertEqual(err.status, HTTP_NOT_FOUND)
+		self.assertEqual(err.error_type, "not_found")
+		self.assertEqual(len(err.details), 1)
+		self.assertEqual(err.request_id, "req-abc-123")
+
+		# Round-trip
+		out = err.to_dict()
+		err2 = ApiErrorResponse.from_map(out)
+		self.assertEqual(err2.status, err.status)
+		self.assertEqual(err2.details, err.details)
+
+	def test_api_error_validation_type(self) -> None:
+		raw = {
+			"status": HTTP_OK,
+			"errorType": "validation",
+			"details": ["name is required", "email is invalid"],
+		}
+
+		err = ApiErrorResponse.from_map(raw)
+		detail_count = 2
+		self.assertEqual(len(err.details), detail_count)
+		self.assertIsNone(err.request_id)
+
+	def test_api_error_rejects_invalid_status_code(self) -> None:
+		raw: dict[str, Any] = {"status": 999, "errorType": "server", "details": []}
+		with self.assertRaises(ConstraintValidationError):
+			ApiErrorResponse.from_map(raw)
+
+	def test_error_detail_with_optional_code(self) -> None:
+		raw_with = {"field": "email", "msg": "Invalid format", "code": "E1001"}
+		detail = ErrorDetail.from_map(raw_with)
+		self.assertEqual(detail.error_code, "E1001")
+
+		raw_without = {"field": "name", "msg": "Required"}
+		detail2 = ErrorDetail.from_map(raw_without)
+		self.assertIsNone(detail2.error_code)
+
+		# to_dict uses aliases
+		self.assertEqual(
+			detail.to_dict(), {"field": "email", "msg": "Invalid format", "code": "E1001"}
+		)
+		self.assertEqual(detail2.to_dict(), {"field": "name", "msg": "Required", "code": None})

@@ -24,9 +24,9 @@ dependencies = []
 
 [dependency-groups]
 dev = [
+	"coverage ~= 7.15.0",
 	"pyrefly ~= 1.1.0",
 	"pyinstrument ~= 5.1.0",
-	"pytest-cov ~= 7.1.0",
 	"ruff ~= 0.15.0",
 ]
 
@@ -61,6 +61,7 @@ ignore = [
 	"ERA001", # Found commented-out code
 	"INP001", # File is part of an implicit namespace package. Add an `__init__.py`.
 	"PLR0913", # Too many arguments in function definition (6 > 5)
+	"PT", # pytest, project uses stdlib unittest
 	"S101", # Use of `assert` detected
 	"T201", # `print` found
 	"W191", # indentation contains tabs
@@ -74,6 +75,9 @@ quote-style = "double"
 ########################################################################################
 #### MARK: Testing
 
+
+[tool.coverage.run]
+source = ["statica"]
 
 [tool.coverage.report]
 omit = [

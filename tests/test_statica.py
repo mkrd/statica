@@ -1,211 +1,202 @@
-import pytest
+import unittest
 
 from statica.core import ConstraintValidationError, Field, Statica, TypeValidationError
 
 
-def test_basic_syntax() -> None:
-	class RequiredStr(Statica):
-		name: str
+class TestStatica(unittest.TestCase):
+	def test_basic_syntax(self) -> None:
+		class RequiredStr(Statica):
+			name: str
 
-	i1 = RequiredStr.from_map({"name": "Test"})
-	assert i1.name == "Test"
+		i1 = RequiredStr.from_map({"name": "Test"})
+		self.assertEqual(i1.name, "Test")
 
-	i1 = RequiredStr(name="Test")
-	assert i1.name == "Test"
+		i1 = RequiredStr(name="Test")
+		self.assertEqual(i1.name, "Test")
 
-	with pytest.raises(TypeValidationError):
-		RequiredStr.from_map({})
+		with self.assertRaises(TypeValidationError):
+			RequiredStr.from_map({})
 
-	with pytest.raises(TypeValidationError):
-		RequiredStr.from_map({"name": 123})
+		with self.assertRaises(TypeValidationError):
+			RequiredStr.from_map({"name": 123})
 
-	class OptionalStr(Statica):
-		name: str | None
+		class OptionalStr(Statica):
+			name: str | None
 
-	i2 = OptionalStr.from_map({"name": "Test"})
-	assert i2.name == "Test"
-	i2 = OptionalStr.from_map({"name": None})
-	assert i2.name is None
-	i2 = OptionalStr.from_map({})
-	assert i2.name is None
-	with pytest.raises(TypeValidationError):
-		OptionalStr.from_map({"name": 123})
+		i2 = OptionalStr.from_map({"name": "Test"})
+		self.assertEqual(i2.name, "Test")
+		i2 = OptionalStr.from_map({"name": None})
+		self.assertIsNone(i2.name)
+		i2 = OptionalStr.from_map({})
+		self.assertIsNone(i2.name)
+		with self.assertRaises(TypeValidationError):
+			OptionalStr.from_map({"name": 123})
 
+	def test_different_field_syntax_variations(self) -> None:
+		class StringTestSyntax1(Statica):
+			name: str
 
-def test_different_field_syntax_variations() -> None:
-	class StringTestSyntax1(Statica):
-		name: str
+		class StringTestSyntax2(Statica):
+			name: str
 
-	class StringTestSyntax2(Statica):
-		name: str
+		class StringTestSyntax3(Statica):
+			name: str = Field()
 
-	class StringTestSyntax3(Statica):
-		name: str = Field()
+		for cls in (StringTestSyntax1, StringTestSyntax2, StringTestSyntax3):
+			instance = cls.from_map({"name": "Test"})
 
-	for cls in (StringTestSyntax1, StringTestSyntax2, StringTestSyntax3):
-		instance = cls.from_map({"name": "Test"})
+			self.assertEqual(getattr(instance, "name", None), "Test")
 
-		assert getattr(instance, "name", None) == "Test"
+			with self.assertRaises(TypeValidationError):
+				cls.from_map({})
 
-		with pytest.raises(TypeValidationError):
-			cls.from_map({})
+			with self.assertRaises(TypeValidationError):
+				cls.from_map({"name": 123})
 
-		with pytest.raises(TypeValidationError):
-			cls.from_map({"name": 123})
+	def test_required_string_field(self) -> None:
+		class StringTest(Statica):
+			name: str
 
+		instance = StringTest(name="Test")
+		self.assertEqual(instance.name, "Test")
 
-def test_required_string_field() -> None:
-	class StringTest(Statica):
-		name: str
+		instance = StringTest.from_map({"name": "Test"})
+		self.assertEqual(instance.name, "Test")
 
-	instance = StringTest(name="Test")
-	assert instance.name == "Test"
+		with self.assertRaises(TypeValidationError):
+			StringTest.from_map({})
 
-	instance = StringTest.from_map({"name": "Test"})
-	assert instance.name == "Test"
+		with self.assertRaises(TypeValidationError):
+			StringTest.from_map({"name": 123})
 
-	with pytest.raises(TypeValidationError):
-		StringTest.from_map({})
+		with self.assertRaises(TypeValidationError):
+			StringTest.from_map({"name": None})
 
-	with pytest.raises(TypeValidationError):
-		StringTest.from_map({"name": 123})
+	def test_optional_string_field(self) -> None:
+		class StringTest(Statica):
+			name: str | None
 
-	with pytest.raises(TypeValidationError):
-		StringTest.from_map({"name": None})
+		instance = StringTest.from_map({"name": "Test"})
+		self.assertEqual(instance.name, "Test")
 
+		instance = StringTest.from_map({"name": None})
+		self.assertIsNone(instance.name)
 
-def test_optional_string_field() -> None:
-	class StringTest(Statica):
-		name: str | None
+		instance = StringTest.from_map({})
+		self.assertIsNone(instance.name)
 
-	instance = StringTest.from_map({"name": "Test"})
-	assert instance.name == "Test"
+		with self.assertRaises(TypeValidationError):
+			StringTest.from_map({"name": 123})
 
-	instance = StringTest.from_map({"name": None})
-	assert instance.name is None
+	def test_string_field_with_length_constraints(self) -> None:
+		class StringTest(Statica):
+			name: str = Field(min_length=3, max_length=5)
 
-	instance = StringTest.from_map({})
-	assert instance.name is None
+		instance = StringTest.from_map({"name": "Test"})
+		self.assertEqual(instance.name, "Test")
 
-	with pytest.raises(TypeValidationError):
-		StringTest.from_map({"name": 123})
+		with self.assertRaises(ConstraintValidationError) as cm:
+			StringTest.from_map({"name": "Te"})
+		self.assertIn("length must be at least 3", str(cm.exception))
 
+		with self.assertRaises(ConstraintValidationError) as cm:
+			StringTest.from_map({"name": "Testing"})
+		self.assertIn("length must be at most 5", str(cm.exception))
 
-def test_string_field_with_length_constraints() -> None:
-	class StringTest(Statica):
-		name: str = Field(min_length=3, max_length=5)
+	def test_string_field_with_whitespace_stripping(self) -> None:
+		class StringTest(Statica):
+			name: str = Field(strip_whitespace=True, max_length=4)
 
-	instance = StringTest.from_map({"name": "Test"})
-	assert instance.name == "Test"
+		instance = StringTest.from_map({"name": " Test "})
+		self.assertEqual(instance.name, "Test")
 
-	with pytest.raises(ConstraintValidationError) as exc_info:
-		StringTest.from_map({"name": "Te"})
-	assert "length must be at least 3" in str(exc_info.value)
+		with self.assertRaises(ConstraintValidationError) as cm:
+			StringTest.from_map({"name": " TestLong "})
+		self.assertIn("length must be at most 4", str(cm.exception))
 
-	with pytest.raises(ConstraintValidationError) as exc_info:
-		StringTest.from_map({"name": "Testing"})
-	assert "length must be at most 5" in str(exc_info.value)
+	def test_integer_field_with_value_constraints(self) -> None:
+		class IntTest(Statica):
+			num: int = Field(min_value=1, max_value=10)
 
+		num = 5
 
-def test_string_field_with_whitespace_stripping() -> None:
-	class StringTest(Statica):
-		name: str = Field(strip_whitespace=True, max_length=4)
+		instance = IntTest.from_map({"num": num})
+		self.assertEqual(instance.num, num)
 
-	instance = StringTest.from_map({"name": " Test "})
-	assert instance.name == "Test"
+		with self.assertRaises(ConstraintValidationError) as cm:
+			IntTest.from_map({"num": 0})
+		self.assertIn("must be at least 1", str(cm.exception))
 
-	with pytest.raises(ConstraintValidationError) as exc_info:
-		StringTest.from_map({"name": " TestLong "})
-	assert "length must be at most 4" in str(exc_info.value)
+		with self.assertRaises(ConstraintValidationError) as cm:
+			IntTest.from_map({"num": 11})
+		self.assertIn("must be at most 10", str(cm.exception))
 
+	def test_custom_error_class(self) -> None:
+		class CustomError(Exception):
+			pass
 
-def test_integer_field_with_value_constraints() -> None:
-	class IntTest(Statica):
-		num: int = Field(min_value=1, max_value=10)
+		class IntTest(Statica):
+			constraint_error_class = CustomError
 
-	num = 5
+			num: int = Field(min_value=1, max_value=10)
 
-	instance = IntTest.from_map({"num": num})
-	assert instance.num == num
+		with self.assertRaises(CustomError) as cm:
+			IntTest.from_map({"num": 0})
+		self.assertIn("must be at least 1", str(cm.exception))
 
-	with pytest.raises(ConstraintValidationError) as exc_info:
-		IntTest.from_map({"num": 0})
-	assert "must be at least 1" in str(exc_info.value)
+		class FloatTest(Statica):
+			num: float = Field(min_value=1, max_value=10)
 
-	with pytest.raises(ConstraintValidationError) as exc_info:
-		IntTest.from_map({"num": 11})
-	assert "must be at most 10" in str(exc_info.value)
+		num_float = 5.5
 
+		instance = FloatTest.from_map({"num": num_float})
+		self.assertEqual(instance.num, num_float)
 
-def test_custom_error_class() -> None:
-	class CustomError(Exception):
-		pass
+		with self.assertRaises(TypeValidationError):
+			FloatTest.from_map({"num": "4"})
 
-	class IntTest(Statica):
-		constraint_error_class = CustomError
+	def test_cast(self) -> None:
+		class IntTest(Statica):
+			num: int = Field(cast_to=int)
 
-		num: int = Field(min_value=1, max_value=10)
+		num_int = 5
+		num_str = str(num_int)
 
-	with pytest.raises(CustomError) as exc_info:
-		IntTest.from_map({"num": 0})
-	assert "must be at least 1" in str(exc_info.value)
+		instance = IntTest.from_map({"num": num_str})
+		self.assertEqual(instance.num, num_int)
 
-	class FloatTest(Statica):
-		num: float = Field(min_value=1, max_value=10)
+		with self.assertRaises(TypeValidationError):
+			IntTest.from_map({"num": "5.5"})
 
-	num_float = 5.5
+	def test_nested_from_map(self) -> None:
+		class Inner(Statica):
+			value: str
 
-	instance = FloatTest.from_map({"num": num_float})
-	assert instance.num == num_float
+		class Outer(Statica):
+			inner: Inner
+			other: str
 
-	with pytest.raises(TypeValidationError):
-		FloatTest.from_map({"num": "4"})
+		instance = Outer.from_map({"inner": {"value": "Test"}, "other": "Other"})
+		self.assertEqual(instance.inner.value, "Test")
 
+		with self.assertRaises(TypeValidationError):
+			Outer.from_map({"inner": {"value": 123}})
 
-def test_cast() -> None:
-	class IntTest(Statica):
-		num: int = Field(cast_to=int)
+	def test_nested_from_map_optional(self) -> None:
+		class Inner(Statica):
+			value: str | None
 
-	num_int = 5
-	num_str = str(num_int)
+		class Outer(Statica):
+			inner: Inner | None
+			other: str
 
-	instance = IntTest.from_map({"num": num_str})
-	assert instance.num == num_int
+		instance = Outer.from_map({"inner": {"value": "Test"}, "other": "Other"})
 
-	with pytest.raises(TypeValidationError):
-		IntTest.from_map({"num": "5.5"})
+		if instance.inner is not None:
+			self.assertEqual(instance.inner.value, "Test")
 
+		instance = Outer.from_map({"inner": None, "other": "Other"})
+		self.assertIsNone(instance.inner)
 
-def test_nested_from_map() -> None:
-	class Inner(Statica):
-		value: str
-
-	class Outer(Statica):
-		inner: Inner
-		other: str
-
-	instance = Outer.from_map({"inner": {"value": "Test"}, "other": "Other"})
-	assert instance.inner.value == "Test"
-
-	with pytest.raises(TypeValidationError):
-		Outer.from_map({"inner": {"value": 123}})
-
-
-def test_nested_from_map_optional() -> None:
-	class Inner(Statica):
-		value: str | None
-
-	class Outer(Statica):
-		inner: Inner | None
-		other: str
-
-	instance = Outer.from_map({"inner": {"value": "Test"}, "other": "Other"})
-
-	if instance.inner is not None:
-		assert instance.inner.value == "Test"
-
-	instance = Outer.from_map({"inner": None, "other": "Other"})
-	assert instance.inner is None
-
-	with pytest.raises(TypeValidationError):
-		Outer.from_map({"inner": {"value": 123}})
+		with self.assertRaises(TypeValidationError):
+			Outer.from_map({"inner": {"value": 123}})
