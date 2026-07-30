@@ -20,8 +20,8 @@ jobs:
       #---- Checkout and set up Python
       #----------------------------------------------
 
-      - name: Install git
-        run: apk add --no-cache git nodejs
+      - name: Install system dependencies
+        run: apk add --no-cache git nodejs just
 
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -54,22 +54,20 @@ jobs:
       #----------------------------------------------
 
       - name: 🔎 Ruff checks
-        run: uv run ruff check .
+        run: just ruff-check
 
       - name: 🔎 Ruff format checks
-        run: uv run ruff format --check .
+        run: just ruff-format
 
       - name: 🐍 Static Type Checker
-        run: uv run pyrefly check . --no-progress-bar
+        run: just typecheck
 
       #----------------------------------------------
       #---- Run tests with coverage report
       #----------------------------------------------
 
       - name: 🚀 Run tests with code coverage report
-        run: |
-          uv run coverage run -m unittest discover
-          uv run coverage report --show-missing
+        run: just test
 
       #----------------------------------------------
       #---- Save coverage artifact

@@ -41,11 +41,16 @@ publish:
 #### MARK: Code Quality
 
 
-alias r := ruff
-ruff:
-	uv run ruff format .
+ruff-check:
 	uv run ruff check . --fix
 
+ruff-format:
+	uv run ruff format --check .
+
+alias r := ruff
+ruff:
+	@just ruff-check
+	@just ruff-format
 
 alias tc := typecheck
 typecheck:
@@ -55,7 +60,7 @@ typecheck:
 alias t := test
 test:
 	uv run coverage run -m unittest discover
-	uv run coverage report
+	uv run coverage report --show-missing
 
 
 alias c := check
