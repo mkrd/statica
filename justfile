@@ -1,7 +1,3 @@
-set dotenv-load := true
-
-# @ means: surpress printing the executed command
-
 default:
 	@just --list
 
@@ -18,18 +14,14 @@ install:
 	# Install dependencies
 	uv sync
 
-
 alias o := outdated
 outdated:
 	uv tree --outdated --depth 1
 
-
 alias up := upgrade
 upgrade:
-	# Update dependencies
 	uv lock --upgrade
 	uv sync
-
 
 publish:
 	uv build
@@ -56,12 +48,10 @@ alias tc := typecheck
 typecheck:
 	uv run pyrefly check . --no-progress-bar
 
-
 alias t := test
 test:
 	uv run coverage run -m unittest discover
 	uv run coverage report --show-missing
-
 
 alias c := check
 check:
