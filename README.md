@@ -23,8 +23,17 @@ While pydantic is a powerful tool for data validation and parsing, Statica offer
 Features
 ----------------------------------------------------------------------------------------
 
-- **Type Validation**: Automatically validates types for attributes based on type hints.
+- **Type Validation**: Automatically validates types for attributes based on type hints, including
+  `tuple`, `frozenset`, `Literal`, `Optional`, `Any`, and abstract containers such as `Sequence`,
+  `Mapping`, and `Set`.
 - **Constraint Validation**: Define constraints like minimum/maximum length, value ranges, and more.
+- **Custom & Cross-Field Validation**: Per-field validators plus an overridable `__post_init__` hook
+  for cross-field and conditional checks.
+- **Full Error Paths**: Errors report the full location, e.g. `User.address.street: expected type 'str', got 'int'`.
+- **Serialization & Coercion**: Built-in coercion for `datetime`, `date`, `time`, `UUID`, `Decimal`,
+  and `Enum`, with extensible codecs and per-field serialization hooks.
+- **Frozen Models**: Opt into immutable, hashable models with `frozen=True`.
+- **Value Semantics**: Value-based equality and optional ordering, configured per class.
 - **Default Field Values**: Set default values for fields that are used when not explicitly provided.
 - **Customizable Error Handling**: Use custom exception classes for type and constraint errors.
 - **Flexible Field Descriptors**: Add constraints, casting, and other behaviors to your fields.
@@ -308,10 +317,189 @@ print(instance.num)  # Output: 42
 ```
 
 
+Supported Types
+----------------------------------------------------------------------------------------
+
+Statica validates a wide range of type annotations, including nested and generic types:
+
+```python
+from typing import Any, Literal, Optional
+from collections.abc import Sequence, Mapping
+
+class Example(Statica):
+    a: tuple[int, str]          # fixed-length tuple
+    b: tuple[int, ...]          # variadic tuple
+    c: frozenset[int]           # frozenset
+    d: Sequence[int]            # abstract containers (Sequence, Mapping, Set, Collection)
+    e: Mapping[str, int]
+    f: Literal["r", "w"]        # literal values
+    g: Optional[int]            # Optional / typing.Union / X | Y
+    h: Any                      # accepts anything
+```
+
+Abstract containers (`Sequence`, `Mapping`, `Set`, `Collection`, `Container`, and their `Mutable*`
+variants) validate their items but leave the value unchanged. `str`/`bytes` are rejected for abstract
+container annotations, and bare `Iterable`/`Iterator`/`Generator` are not supported because validating
+them would consume the iterable.
+
+### Recursive models
+
+Models may reference themselves (or each other) using string forward references. The annotation is
+resolved lazily, so self-referential and mutually-referential models work as long as they are defined
+at module scope:
+
+```python
+class Category(Statica):
+    name: str
+    children: list["Category"] = Field(default=[])
+
+tree = Category.from_map({
+    "name": "root",
+    "children": [{"name": "a", "children": [{"name": "a1"}]}, {"name": "b"}],
+})
+```
+
+Error paths follow the recursion, e.g. `Category.children[0].children[0].name: ...`.
+
+
+Class Configuration
+----------------------------------------------------------------------------------------
+
+Models are configured with class keyword arguments:
+
+```python
+class CustomerModel(
+    Statica,
+    init=True,    # generate __init__ (default True; set False to write your own)
+    frozen=True,  # immutable + hashable (default False)
+    eq=True,      # value-based equality (default True)
+    order=True,   # generate <, <=, >, >= (default False)
+):
+    id: int
+    name: str
+```
+
+These options are inherited by subclasses unless overridden, so a shared base can configure them once:
+
+```python
+class BaseModel(Statica, frozen=True):
+    pass
+
+class User(BaseModel):  # also frozen
+    id: int
+```
+
+Note: because a type checker cannot see that `frozen` is inherited at runtime, restate `frozen=True`
+on subclasses if you want static frozen-consistency checks to pass.
+
+### Frozen models
+
+`frozen=True` blocks attribute assignment after initialization and makes the model hashable:
+
+```python
+class Point(Statica, frozen=True):
+    x: int
+    y: int
+
+p = Point(x=1, y=2)
+p.x = 5            # raises FrozenInstanceError
+{p}                # hashable, usable in sets and as dict keys
+```
+
+Hashing mirrors `dataclasses`: `frozen=True, eq=True` models are hashable; the default
+(`frozen=False, eq=True`) model is unhashable; and `eq=False` models keep identity hashing.
+
+
+Custom and Cross-Field Validation
+----------------------------------------------------------------------------------------
+
+Provide a per-field validator that may transform the value or reject it. It runs last, after type and
+constraint checks:
+
+```python
+def normalize_email(value: str) -> str:
+    if "@" not in value:
+        raise ValueError("invalid email")
+    return value.lower()
+
+class Account(Statica):
+    email: str = Field(validator=normalize_email)
+```
+
+For cross-field or conditional validation, define `__post_init__`; it runs at the end of
+initialization (including `from_map`):
+
+```python
+class DateRange(Statica):
+    start: int
+    end: int
+
+    def __post_init__(self) -> None:
+        if self.start > self.end:
+            raise ValueError("start must be <= end")
+```
+
+
+Serialization and Type Coercion
+----------------------------------------------------------------------------------------
+
+`datetime`, `date`, `time`, `UUID`, `Decimal`, and `Enum` fields are decoded from their JSON-friendly
+representation on input and encoded back on `to_dict`. Coercion applies recursively inside containers:
+
+```python
+from datetime import datetime
+from uuid import UUID
+
+class Event(Statica):
+    when: datetime
+    id: UUID
+    stamps: list[datetime]
+
+event = Event.from_map({
+    "when": "2020-01-02T03:04:05",
+    "id": "12345678-1234-5678-1234-567812345678",
+    "stamps": ["2021-01-01T00:00:00"],
+})
+
+event.to_dict()  # {"when": "2020-01-02T03:04:05", "id": "1234...", "stamps": ["2021-01-01T00:00:00"]}
+```
+
+`to_dict` also recurses into nested models and containers of models. Register custom codecs via the
+config, or override serialization for a single field:
+
+```python
+from statica import Codec, StaticaConfig
+
+config = StaticaConfig.create(codecs={MyType: Codec(decode=MyType.parse, encode=str)})
+
+class Model(Statica, config=config):
+    value: int = Field(serializer=lambda v: f"#{v}")  # per-field output hook
+```
+
+
+Error Context
+----------------------------------------------------------------------------------------
+
+Validation errors report the full path to the offending value, including nested models, list and
+tuple indices, and mapping keys:
+
+```python
+class Street(Statica):
+    name: str
+
+class User(Statica):
+    street: Street
+
+User.from_map({"street": {"name": 123}})
+# TypeValidationError: User.street.name: expected type 'str', got 'int'
+```
+
+
 Design Decisions
 ----------------------------------------------------------------------------------------
 
 - [Inheritance over Decorators](docs/decision-inheritance-over-decorators.md)
+- [Class Configuration and Value Semantics](docs/decision-class-configuration.md)
 
 
 Contributing

@@ -27,24 +27,17 @@ class TestDescriptor(unittest.TestCase):
 		self.assertEqual(d_data.name, "data")
 		self.assertIs(d_data.owner, Test)
 		self.assertIs(d_data.expected_type, str)
-		self.assertEqual(set(d_data.sub_types), {str})
-		self.assertIsNone(d_data.statica_sub_class)
 
 		d_data_optional = Test.data_optional
 		self.assertIsInstance(d_data_optional, FieldDescriptor)
 		self.assertIs(d_data_optional.owner, Test)
 		self.assertEqual(d_data_optional.expected_type, int | None)
-		self.assertEqual(set(d_data_optional.sub_types), {int, type(None)})
-		self.assertIsNone(d_data_optional.statica_sub_class)
 
 		d_sub = Test.sub
 		self.assertIsInstance(d_sub, FieldDescriptor)
 		self.assertEqual(d_sub.name, "sub")
 		self.assertIs(d_sub.owner, Test)
 		self.assertIs(d_sub.expected_type, TestSubclass)
-		self.assertEqual(set(d_sub.sub_types), {TestSubclass})
-		self.assertIs(d_sub.statica_sub_class, TestSubclass)
-		self.assertIsNotNone(d_sub.statica_sub_class)
 
 	def test_descriptor_generic_list(self) -> None:
 		"""Test descriptor metadata for list[int] field."""
@@ -56,7 +49,6 @@ class TestDescriptor(unittest.TestCase):
 		self.assertIsInstance(d, FieldDescriptor)
 		self.assertEqual(d.name, "items")
 		self.assertEqual(d.expected_type, list[int])
-		self.assertIsNone(d.statica_sub_class)
 
 	def test_descriptor_generic_dict(self) -> None:
 		"""Test descriptor metadata for dict[str, int] field."""
@@ -68,7 +60,6 @@ class TestDescriptor(unittest.TestCase):
 		self.assertIsInstance(d, FieldDescriptor)
 		self.assertEqual(d.name, "data")
 		self.assertEqual(d.expected_type, dict[str, int])
-		self.assertIsNone(d.statica_sub_class)
 
 	def test_descriptor_literal(self) -> None:
 		"""Test descriptor metadata for Literal field."""
@@ -79,7 +70,6 @@ class TestDescriptor(unittest.TestCase):
 		d = Model.status
 		self.assertIsInstance(d, FieldDescriptor)
 		self.assertEqual(d.name, "status")
-		self.assertIsNone(d.statica_sub_class)
 
 	def test_descriptor_optional_statica_subclass(self) -> None:
 		"""Test descriptor identifies Statica subclass in optional union."""
@@ -93,8 +83,6 @@ class TestDescriptor(unittest.TestCase):
 		d = Outer.inner
 		self.assertIsInstance(d, FieldDescriptor)
 		self.assertEqual(d.expected_type, Inner | None)
-		self.assertEqual(set(d.sub_types), {Inner, type(None)})
-		self.assertIs(d.statica_sub_class, Inner)
 
 	def test_descriptor_constraint_metadata(self) -> None:
 		"""Test descriptor stores constraint metadata correctly."""
@@ -183,5 +171,4 @@ class TestDescriptor(unittest.TestCase):
 
 		d = Model.value
 		self.assertIsInstance(d, FieldDescriptor)
-		self.assertEqual(set(d.sub_types), {int, float, str, type(None)})
-		self.assertIsNone(d.statica_sub_class)
+		self.assertEqual(d.expected_type, int | float | str | None)

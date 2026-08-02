@@ -41,7 +41,6 @@ class TestValidation(unittest.TestCase):
 		test_dict2 = {"key1": 1, "key2": None}
 
 		i3 = TypedDictTest2.from_map({"data": test_dict2})
-		print(i3.data)
 		self.assertEqual(i3.data, test_dict2)
 
 	def test_list_as_field(self) -> None:
@@ -89,12 +88,18 @@ class TestValidation(unittest.TestCase):
 		with self.assertRaises(TypeValidationError):
 			SetTest.from_map({"items": "not a set"})
 
-	def test_validate_unsupported_generic_alias(self) -> None:
-		class UnsupportedGeneric(Statica):
+	def test_validate_frozenset(self) -> None:
+		class FrozensetModel(Statica):
 			data: frozenset[int]
 
+		instance = FrozensetModel(data=frozenset([1, 2, 3]))
+		self.assertEqual(instance.data, frozenset([1, 2, 3]))
+
 		with self.assertRaises(TypeValidationError):
-			UnsupportedGeneric(data=frozenset([1, 2, 3]))
+			FrozensetModel(data=frozenset(["a", "b"]))  # type: ignore[arg-type]
+
+		with self.assertRaises(TypeValidationError):
+			FrozensetModel(data=[1, 2, 3])  # type: ignore[arg-type]
 
 	def test_validate_literal(self) -> None:
 		class LiteralTest(Statica):

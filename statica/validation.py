@@ -1,228 +1,395 @@
 """
-The backus naur grammar for types is as follows:
+The backus naur grammar for supported types is as follows:
 T ::= Statica
-	| int
-	| float
-	| str
-	| None
-	| (T1 | T2)
-	| list[T]
-	| set[T]
+	| Any
+	| int | float | str | bool | None
+	| datetime | date | time | UUID | Decimal | <Enum subclass>
+	| (T1 | T2)                 # union, both `X | Y` and typing.Union / Optional
+	| list[T] | set[T] | frozenset[T]
+	| tuple[T, ...] | tuple[T1, T2, ...] | tuple[()]
 	| dict[T1, T2]
 	| Literal[V1, ...]
+	| Sequence[T] | Mapping[T1, T2] | Set[T] | Collection[T] | Container[T]
+	| (and their Mutable* variants)
 
-
-Where:
-- Statica: A class that inherits from Statica
-- Built-in types: int, float, str, None
-- Union types: (T1 | T2)
-- Generic alias types: list[T], set[T], dict[T1, T2]
-
-Note:
-If a union type contains a generic alias, it cannot be checked using the `isinstance`
-function, because `isinstance` does not support generic aliases directly.
+Notes:
+- Coercion (codecs for datetime/UUID/... and Enum) happens during validation and
+  is applied recursively for concrete containers, so `list[datetime]` decodes each
+  item. `validate_or_raise` therefore returns the (possibly coerced) value.
+- Abstract (collections.abc) containers are validated but their items are NOT
+  coerced/rebuilt, since the concrete result type is unknown.
+- str/bytes are rejected for abstract containers to avoid per-character validation.
 """
 
 from __future__ import annotations
 
-from types import GenericAlias, UnionType
-from typing import Any, Literal, TypeGuard, Union
+from collections import abc
+from decimal import Decimal
+from enum import Enum
+from types import UnionType
+from typing import Any, Literal, NoReturn, Union, get_args, get_origin
 
 from statica.config import StaticaConfig, default_config
 from statica.exceptions import ConstraintValidationError, TypeValidationError
 
 ########################################################################################
-#### MARK: Types
+#### MARK: Statica base (lazy import to avoid a cycle with statica.core)
 
 
-class LiteralGenericAlias:
-	"""A type used in place of typing._LiteralGenericAlias to avoid private imports."""
-
-	__origin__ = Literal
-	__args__: tuple[Any, ...]
+_statica_base: type | None = None
 
 
-def is_literal_generic_alias(expected_type: Any) -> TypeGuard[LiteralGenericAlias]:
-	return hasattr(expected_type, "__origin__") and expected_type.__origin__ is Literal
+def _get_statica_base() -> type:
+	global _statica_base  # noqa: PLW0603
+	if _statica_base is None:
+		from statica.core import Statica  # noqa: PLC0415
+
+		_statica_base = Statica
+	return _statica_base
 
 
-class UnionGenericAlias:
-	"""A type used in place of typing._UnionGenericAlias to avoid private imports."""
+def _is_statica_type(expected_type: Any) -> bool:
+	if not isinstance(expected_type, type):
+		return False
+	return issubclass(expected_type, _get_statica_base())
 
-	__origin__ = Union
-	__args__: tuple[Any, ...]
+
+########################################################################################
+#### MARK: Abstract container classification
 
 
-def is_union_generic_alias(expected_type: Any) -> TypeGuard[UnionGenericAlias]:
-	return hasattr(expected_type, "__origin__") and expected_type.__origin__ is Union
+_ABC_MAPPINGS: tuple[type, ...] = (abc.Mapping, abc.MutableMapping)
+_ABC_ITERABLE_CONTAINERS: tuple[type, ...] = (
+	abc.Sequence,
+	abc.MutableSequence,
+	abc.Set,
+	abc.MutableSet,
+	abc.Collection,
+)
+_ABC_ISINSTANCE_ONLY: tuple[type, ...] = (abc.Container,)
+_ABC_REJECTED: tuple[type, ...] = (
+	abc.Iterable,
+	abc.Iterator,
+	abc.Generator,
+	abc.Reversible,
+	abc.AsyncIterable,
+	abc.AsyncIterator,
+	abc.AsyncGenerator,
+)
+
+
+########################################################################################
+#### MARK: Helpers
+
+
+def _type_name(expected_type: Any) -> str:
+	return getattr(expected_type, "__name__", None) or str(expected_type)
+
+
+def _raise_type_error(
+	expected_name: str,
+	value: Any,
+	config: StaticaConfig,
+	loc: tuple[str, ...],
+	*,
+	cause: BaseException | None = None,
+) -> NoReturn:
+	msg = config.type_error_message.format(
+		expected_type=expected_name,
+		found_type=type(value).__name__,
+	)
+	raise TypeValidationError(msg, loc=list(loc)) from cause
 
 
 ########################################################################################
 #### MARK: Type Validation
 
 
-def validate_or_raise(
+def validate_or_raise(  # noqa: PLR0911
 	value: Any,
-	expected_type: type | UnionType | GenericAlias,
+	expected_type: Any,
 	config: StaticaConfig = default_config,
-) -> None:
+	loc: tuple[str, ...] = (),
+) -> Any:
 	"""
-	Value can be a nested structure, where all dicts with have a Statica type hint
-	are already initialized Statica objects.
+	Validate `value` against `expected_type`, returning the (possibly coerced)
+	value. Raises TypeValidationError on mismatch.
 	"""
 
 	# Handle typing.Any, which accepts any value
 
 	if expected_type is Any:
-		return
+		return value
 
-	# Handle generic aliases if native python types, e.g. list[int], dict[str, int]
+	origin = get_origin(expected_type)
 
-	if isinstance(expected_type, GenericAlias):
-		validate_type_generic_alias(value, expected_type, config)
-		return
+	# Handle unions: both `X | Y` (UnionType) and typing.Union / typing.Optional
 
-	# Handle parameterized generic types
+	if origin is Union or origin is UnionType or isinstance(expected_type, UnionType):
+		return _validate_union(value, expected_type, config, loc)
 
-	if is_union_generic_alias(expected_type):
-		validate_type_union_generic_alias(value, expected_type, config)
-		return
+	# Handle Literal[...]
 
-	# Handle Literal (e.g. Literal["a", "b"], with any number and type of values)
+	if origin is Literal:
+		_validate_literal(value, expected_type, loc)
+		return value
 
-	if is_literal_generic_alias(expected_type):
-		validate_literal(value, expected_type)
-		return
+	# Handle parameterized generics (list[int], dict[str, int], Sequence[int], ...)
 
-	# Handle union types
+	if origin is not None:
+		return _validate_generic(value, expected_type, origin, config, loc)
 
-	if isinstance(expected_type, UnionType):
-		validate_type_union(value, expected_type, config)
-		return
+	# Handle Enum subclasses (decode from the member value if needed)
 
-	# Handle all other types
+	if isinstance(expected_type, type) and issubclass(expected_type, Enum):
+		return _coerce_enum(value, expected_type, config, loc)
+
+	# Handle codec-backed types (datetime, UUID, Decimal, ...)
+
+	if isinstance(expected_type, type):
+		codec = config.codecs.get(expected_type)
+		if codec is not None:
+			return _coerce_codec(value, expected_type, codec, config, loc)
+
+	# Handle nested Statica models
+
+	if _is_statica_type(expected_type):
+		return _validate_statica(value, expected_type, config, loc)
+
+	# Handle all other (plain) types
 
 	if isinstance(value, expected_type):
-		return
+		return value
 
-	msg = config.type_error_message.format(
-		expected_type=expected_type.__name__,
-		found_type=type(value).__name__,
-	)
-	raise TypeValidationError(msg)
+	_raise_type_error(_type_name(expected_type), value, config, loc)
 
 
-def validate_literal(
+def _validate_union(
 	value: Any,
-	expected_type: LiteralGenericAlias,
-) -> None:
-	"""
-	Validate that the value matches one of the literals in the expected_type.
-	Throws TypeValidationError if the value is not one of the literals.
-	"""
-	if value not in expected_type.__args__:
-		msg = f"expected one of {expected_type.__args__}, got '{value}'"
-		raise TypeValidationError(msg)
-
-
-def validate_type_union(
-	value: Any,
-	expected_type: UnionType,
-	config: StaticaConfig = default_config,
-) -> None:
-	"""
-	Validate that the value matches one of the types in the UnionType.
-	Throws TypeValidationError if the type does not match any of the union types.
-	"""
-	for sub_type in expected_type.__args__:
+	expected_type: Any,
+	config: StaticaConfig,
+	loc: tuple[str, ...],
+) -> Any:
+	args = get_args(expected_type)
+	for sub_type in args:
 		try:
-			validate_or_raise(value, sub_type)
-		except TypeValidationError:
-			continue  # Try the next sub-type
-		else:
-			return  # Exit if one of the sub-types matches
+			return validate_or_raise(value, sub_type, config, loc)
+		except (TypeValidationError, ConstraintValidationError):
+			continue
 
-	msg = config.type_error_message.format(
-		expected_type=expected_type.__args__,
-		found_type=type(value).__name__,
-	)
-	raise TypeValidationError(msg)
+	expected_name = " | ".join(_type_name(a) for a in args)
+	_raise_type_error(expected_name, value, config, loc)
 
 
-def validate_type_union_generic_alias(
+def _validate_literal(
 	value: Any,
-	expected_type: UnionGenericAlias,
-	config: StaticaConfig = default_config,
+	expected_type: Any,
+	loc: tuple[str, ...],
 ) -> None:
-	"""
-	Validate that the value matches one of the types in the UnionGenericAlias.
-	Throws TypeValidationError if the type does not match any of the union types.
-	"""
-	for sub_type in expected_type.__args__:
+	args = get_args(expected_type)
+	if value not in args:
+		msg = f"expected one of {args}, got {value!r}"
+		raise TypeValidationError(msg, loc=list(loc))
+
+
+def _coerce_codec(
+	value: Any,
+	expected_type: type,
+	codec: Any,
+	config: StaticaConfig,
+	loc: tuple[str, ...],
+) -> Any:
+	if isinstance(value, expected_type):
+		return value
+	try:
+		return codec.decode(value)
+	except (ValueError, TypeError, ArithmeticError) as e:
+		# ValueError: datetime.fromisoformat / UUID; ArithmeticError: Decimal.
+		_raise_type_error(expected_type.__name__, value, config, loc, cause=e)
+
+
+def _coerce_enum(
+	value: Any,
+	enum_cls: type[Enum],
+	config: StaticaConfig,
+	loc: tuple[str, ...],
+) -> Any:
+	if isinstance(value, enum_cls):
+		return value
+	try:
+		return enum_cls(value)
+	except ValueError as e:
+		_raise_type_error(enum_cls.__name__, value, config, loc, cause=e)
+
+
+def _validate_statica(
+	value: Any,
+	expected_type: type,
+	config: StaticaConfig,
+	loc: tuple[str, ...],
+) -> Any:
+	if isinstance(value, expected_type):
+		return value
+	if isinstance(value, dict):
 		try:
-			validate_or_raise(value, sub_type, config)
-		except TypeValidationError:
-			continue  # Try the next sub-type
-		else:
-			return  # Exit if one of the sub-types matches
-
-	msg = config.type_error_message.format(
-		expected_type=expected_type.__args__,
-		found_type=type(value).__name__,
-	)
-	raise TypeValidationError(msg)
+			return expected_type.from_map(value)  # type: ignore[attr-defined]
+		except (TypeValidationError, ConstraintValidationError) as e:
+			e.loc = list(loc) + e.loc
+			raise
+	_raise_type_error(expected_type.__name__, value, config, loc)
 
 
-def validate_type_generic_alias(
+########################################################################################
+#### MARK: Generic alias validation
+
+
+def _validate_generic(
 	value: Any,
-	expected_type: GenericAlias,
-	config: StaticaConfig = default_config,
-) -> None:
-	origin = expected_type.__origin__
+	expected_type: Any,
+	origin: Any,
+	config: StaticaConfig,
+	loc: tuple[str, ...],
+) -> Any:
+	args = get_args(expected_type)
 
+	if origin is list:
+		return _validate_list(value, args[0], config, loc)
+	if origin is set:
+		return _validate_set(value, set, args[0], config, loc)
+	if origin is frozenset:
+		return _validate_set(value, frozenset, args[0], config, loc)
+	if origin is tuple:
+		return _validate_tuple(value, args, config, loc)
 	if origin is dict:
-		key_type, value_type = expected_type.__args__
+		return _validate_dict(value, args[0], args[1], config, loc)
 
-		if not isinstance(value, dict):
-			msg = config.type_error_message.format(
-				expected_type=f"dict[{key_type.__name__}, {value_type.__name__}]",
-				found_type=type(value).__name__,
-			)
-			raise TypeValidationError(msg)
-		for key, val in value.items():
-			validate_or_raise(key, key_type)
-			validate_or_raise(val, value_type)
+	return _validate_abc(value, origin, args, config, loc)
 
-	elif origin is list:
-		item_type = expected_type.__args__[0]
 
-		if not isinstance(value, list):
-			msg = config.type_error_message.format(
-				expected_type=f"list[{item_type.__name__}]",
-				found_type=type(value).__name__,
-			)
-			raise TypeValidationError(msg)
-		for item in value:
-			validate_or_raise(item, item_type)
+def _validate_list(
+	value: Any,
+	item_type: Any,
+	config: StaticaConfig,
+	loc: tuple[str, ...],
+) -> list[Any]:
+	if not isinstance(value, list):
+		_raise_type_error(f"list[{_type_name(item_type)}]", value, config, loc)
+	return [
+		validate_or_raise(item, item_type, config, (*loc, f"[{i}]")) for i, item in enumerate(value)
+	]
 
-	elif origin is set:
-		item_type = expected_type.__args__[0]
 
-		if not isinstance(value, set):
-			msg = config.type_error_message.format(
-				expected_type=f"set[{item_type.__name__}]",
-				found_type=type(value).__name__,
-			)
-			raise TypeValidationError(msg)
-		for item in value:
-			validate_or_raise(item, item_type)
+def _validate_set(
+	value: Any,
+	target: type,
+	item_type: Any,
+	config: StaticaConfig,
+	loc: tuple[str, ...],
+) -> Any:
+	if not isinstance(value, target):
+		_raise_type_error(f"{target.__name__}[{_type_name(item_type)}]", value, config, loc)
+	return target(
+		validate_or_raise(item, item_type, config, (*loc, f"{{{item!r}}}")) for item in value
+	)
 
-	else:
-		msg = config.type_error_message.format(
-			expected_type=expected_type.__name__,
-			found_type=type(value).__name__ + " (not supported)",
+
+def _validate_tuple(
+	value: Any,
+	args: tuple[Any, ...],
+	config: StaticaConfig,
+	loc: tuple[str, ...],
+) -> tuple[Any, ...]:
+	if not isinstance(value, tuple):
+		_raise_type_error(f"tuple[{', '.join(_type_name(a) for a in args)}]", value, config, loc)
+
+	# Empty tuple: tuple[()]
+	if args == ():
+		if len(value) != 0:
+			msg = f"expected empty tuple, got tuple of length {len(value)}"
+			raise TypeValidationError(msg, loc=list(loc))
+		return value
+
+	# Variadic tuple: tuple[T, ...]
+	if len(args) == 2 and args[1] is Ellipsis:  # noqa: PLR2004
+		item_type = args[0]
+		return tuple(
+			validate_or_raise(item, item_type, config, (*loc, f"[{i}]"))
+			for i, item in enumerate(value)
 		)
-		raise TypeValidationError(msg)
+
+	# Fixed-length tuple: tuple[T1, T2, ...]
+	if len(value) != len(args):
+		msg = f"expected tuple of length {len(args)}, got length {len(value)}"
+		raise TypeValidationError(msg, loc=list(loc))
+	return tuple(
+		validate_or_raise(item, arg, config, (*loc, f"[{i}]"))
+		for i, (item, arg) in enumerate(zip(value, args, strict=True))
+	)
+
+
+def _validate_dict(
+	value: Any,
+	key_type: Any,
+	value_type: Any,
+	config: StaticaConfig,
+	loc: tuple[str, ...],
+) -> dict[Any, Any]:
+	if not isinstance(value, dict):
+		expected = f"dict[{_type_name(key_type)}, {_type_name(value_type)}]"
+		_raise_type_error(expected, value, config, loc)
+
+	result: dict[Any, Any] = {}
+	for key, val in value.items():
+		new_key = validate_or_raise(key, key_type, config, (*loc, f"<key {key!r}>"))
+		new_val = validate_or_raise(val, value_type, config, (*loc, f"[{key!r}]"))
+		result[new_key] = new_val
+	return result
+
+
+def _validate_abc(  # noqa: C901
+	value: Any,
+	origin: Any,
+	args: tuple[Any, ...],
+	config: StaticaConfig,
+	loc: tuple[str, ...],
+) -> Any:
+	if origin in _ABC_REJECTED:
+		msg = (
+			f"unsupported type '{_type_name(origin)}': items cannot be validated "
+			f"without consuming the iterable"
+		)
+		raise TypeValidationError(msg, loc=list(loc))
+
+	# str/bytes technically satisfy Sequence/Collection/Container; reject them so
+	# that Sequence[int] does not silently accept a string and validate characters.
+	if isinstance(value, (str, bytes)):
+		_raise_type_error(f"{_type_name(origin)}[...]", value, config, loc)
+
+	if origin in _ABC_MAPPINGS:
+		if not isinstance(value, abc.Mapping):
+			_raise_type_error(f"{_type_name(origin)}[...]", value, config, loc)
+		key_type, value_type = args
+		for key, val in value.items():
+			validate_or_raise(key, key_type, config, (*loc, f"<key {key!r}>"))
+			validate_or_raise(val, value_type, config, (*loc, f"[{key!r}]"))
+		return value
+
+	if origin in _ABC_ISINSTANCE_ONLY:
+		if not isinstance(value, origin):
+			_raise_type_error(f"{_type_name(origin)}[...]", value, config, loc)
+		return value
+
+	if origin in _ABC_ITERABLE_CONTAINERS:
+		# Validate each item, but do not coerce/rebuild: the concrete type is unknown.
+		if not isinstance(value, origin):
+			_raise_type_error(f"{_type_name(origin)}[...]", value, config, loc)
+		item_type = args[0]
+		for i, item in enumerate(value):
+			validate_or_raise(item, item_type, config, (*loc, f"[{i}]"))
+		return value
+
+	msg = f"unsupported type '{_type_name(origin)}'"
+	raise TypeValidationError(msg, loc=list(loc))
 
 
 ########################################################################################
@@ -241,15 +408,11 @@ def validate_constraints(
 	config: StaticaConfig = default_config,
 ) -> Any:
 	"""
-	If the value is a string, strip the whitespace if `strip_whitespace` is True.
+	Apply constraint checks to `value`, returning the (possibly stripped) value.
 
-	If the value is a string, list, tuple, or dict, check its length against
-	the `min_length` and `max_length` constraints.
-
-	If the value is an int or float, check its value against the `min_value`
-	and `max_value` constraints.
-
-	Throws ConstraintValidationError if any constraints are violated.
+	Length constraints apply to str/list/tuple/dict/set; value constraints apply
+	to int/float/Decimal. Raises ConstraintValidationError on violation. The field
+	name is carried as the error location so the full path can be rendered.
 	"""
 
 	# For performance, exit early if no constraints are provided
@@ -265,32 +428,34 @@ def validate_constraints(
 	if strip_whitespace and isinstance(value, str):
 		value = value.strip()
 
-	if isinstance(value, (str, list, tuple, dict)):
+	loc = [field_name]
+
+	if isinstance(value, (str, list, tuple, dict, set, frozenset)):
 		if min_length is not None and len(value) < min_length:
 			msg = config.min_length_error_message.format(
 				field_name=field_name,
 				min_length=min_length,
 			)
-			raise ConstraintValidationError(msg)
+			raise ConstraintValidationError(msg, loc=loc)
 		if max_length is not None and len(value) > max_length:
 			msg = config.max_length_error_message.format(
 				field_name=field_name,
 				max_length=max_length,
 			)
-			raise ConstraintValidationError(msg)
+			raise ConstraintValidationError(msg, loc=loc)
 
-	if isinstance(value, int | float):
+	if isinstance(value, (int, float, Decimal)):
 		if min_value is not None and value < min_value:
 			msg = config.min_value_error_message.format(
 				field_name=field_name,
 				min_value=min_value,
 			)
-			raise ConstraintValidationError(msg)
+			raise ConstraintValidationError(msg, loc=loc)
 		if max_value is not None and value > max_value:
 			msg = config.max_value_error_message.format(
 				field_name=field_name,
 				max_value=max_value,
 			)
-			raise ConstraintValidationError(msg)
+			raise ConstraintValidationError(msg, loc=loc)
 
 	return value

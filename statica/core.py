@@ -3,11 +3,12 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from types import UnionType
+from enum import Enum
 from typing import (
 	TYPE_CHECKING,
 	Any,
 	Generic,
+	NoReturn,
 	Self,
 	TypeVar,
 	dataclass_transform,
@@ -16,7 +17,12 @@ from typing import (
 )
 
 from statica.config import StaticaConfig, default_config
-from statica.exceptions import ConstraintValidationError, TypeValidationError
+from statica.exceptions import (
+	ConstraintValidationError,
+	FrozenInstanceError,
+	TypeValidationError,
+	ValidationError,
+)
 from statica.validation import validate_constraints, validate_or_raise
 
 if TYPE_CHECKING:
@@ -32,6 +38,13 @@ try:
 	)
 except ImportError:  # Python < 3.14 has no annotationlib
 	Format, call_annotate_function, get_annotate_from_class_namespace = None, None, None
+
+
+#: Sentinel marking a class argument as "not provided", so it can be inherited.
+_UNSET: Any = object()
+
+#: Sentinel marking a field's expected type as not yet resolved.
+_UNRESOLVED: Any = object()
 
 
 def _get_class_annotations(namespace: dict[str, Any]) -> dict[str, Any]:
@@ -61,6 +74,23 @@ def _get_class_annotations(namespace: dict[str, Any]) -> dict[str, Any]:
 #### MARK: Field descriptor
 
 
+def _reraise_as(error: ValidationError, error_class: type[Exception]) -> NoReturn:
+	"""
+	Re-raise a validation error as the class configured on the owner model.
+
+	If the target class is a `ValidationError` subclass, the structured location
+	(`loc`/`root`) is preserved so nested paths still compose into a single path
+	(e.g. `Book.account.code`). Otherwise the message, which already contains the
+	rendered path, is baked into the new exception.
+	"""
+
+	if isinstance(error, error_class):
+		raise error
+	if issubclass(error_class, ValidationError):
+		raise error_class(error.message, loc=error.loc, root=error.root) from error
+	raise error_class(str(error)) from error
+
+
 @dataclass(slots=True)
 class FieldDescriptor(Generic[T]):
 	"""
@@ -83,29 +113,11 @@ class FieldDescriptor(Generic[T]):
 
 	owner: type[Statica] = dataclass_field(init=False)
 	"""
-	Owner class of the field descriptor.
-	Example: `<class '__main__.User'>` for the field `age: int | None`.
+	Owner class of the field descriptor (the class the field is declared on).
 	"""
 
-	expected_type: Any = dataclass_field(init=False)
-	"""
-	Expected type of the field.
-	Example 1: `int | None` (of type UnionType) for the field `age: int | None`.
-	Example 2: `<class 'int'>` for a field `number: int`.
-	"""
-
-	sub_types: tuple[type, ...] = dataclass_field(init=False, default_factory=tuple)
-	"""
-	List of types that expected_type is composed of.
-	If expected_type is not of type UnionType, then it is just a tuple with one element.
-	"""
-
-	statica_sub_class: type[Statica] | None = dataclass_field(init=False, repr=False)
-	"""
-	Statica subclass if the expected_type is a Statica subclass or a union where one
-	of the types is a Statica subclass.
-	For example, if expected_type is `Union[Statica, int]`, then this will be `Statica`.
-	"""
+	_resolved_type: Any = dataclass_field(init=False, default=_UNRESOLVED, repr=False)
+	"""Cache for the lazily-resolved `expected_type` (see the property below)."""
 
 	# User-facing dataclass fields
 
@@ -116,40 +128,29 @@ class FieldDescriptor(Generic[T]):
 	max_value: float | None = None
 	strip_whitespace: bool | None = None
 	cast_to: Callable[..., T] | None = None
+	validator: Callable[[Any], Any] | None = None
+	serializer: Callable[[Any], Any] | None = None
 
 	alias: str | None = None
 
 	def __set_name__(self, owner: Any, name: str) -> None:
 		self.name = name
 		self.owner = owner
-		self.expected_type = get_type_hints(owner)[name]
-		self.sub_types = self.get_sub_types(self.expected_type)
-		self.statica_sub_class = self.get_statica_subclass(self.sub_types)
+		# `expected_type` is resolved lazily (see the property) rather than here,
+		# so that self-referential and forward-referenced models work: at class
+		# creation time the class is not yet bound in its module namespace.
 
-	def get_sub_types(self, expected_type: Any) -> tuple[type | Any, ...]:
+	@property
+	def expected_type(self) -> Any:
 		"""
-		Get all subtypes of the expected type.
-		For example, if the expected type is Union[str, int], return [str, int].
+		Expected type of the field, resolved lazily from the owner's annotations.
+
+		Example 1: `int | None` (of type UnionType) for the field `age: int | None`.
+		Example 2: `<class 'int'>` for a field `number: int`.
 		"""
-
-		if type(expected_type) is UnionType:
-			return tuple(t for t in expected_type.__args__)
-
-		return (expected_type,)
-
-	def get_statica_subclass(self, sub_types: tuple[type, ...]) -> type[Statica] | None:
-		"""
-		Get the first Statica subclass from the sub_types.
-		Returns None if no Statica subclass is found.
-		"""
-
-		try:
-			for sub_type in sub_types:
-				if issubclass(sub_type, Statica):
-					return sub_type
-		except TypeError:
-			pass
-		return None
+		if self._resolved_type is _UNRESOLVED:
+			self._resolved_type = get_type_hints(self.owner)[self.name]
+		return self._resolved_type
 
 	def get_default_safe(self) -> Any:
 		"""
@@ -169,34 +170,42 @@ class FieldDescriptor(Generic[T]):
 			return self  # Accessed on the class, return the descriptor
 		return instance.__dict__.get(self.name)
 
-	def __set__(self, instance: object, value: T) -> None:
+	def __set__(self, instance: Statica, value: T) -> None:
 		"""
 		Set the value of the field on the instance.
 		For example user.age = 30 will invoke this method.
 		"""
 
-		instance.__dict__[self.name] = self.validate(value)
+		instance.__dict__[self.name] = self.validate(value, type(instance))
 
-	def validate(self, value: Any) -> Any:
+	def _run_validator(self, value: Any) -> Any:
+		assert self.validator is not None
 		try:
-			config = self.owner.__config__  # type: ignore[attr-defined]
+			return self.validator(value)
+		except (TypeValidationError, ConstraintValidationError) as e:
+			if not e.loc:
+				e.loc = [self.name]
+			raise
+		except ValueError as e:
+			raise ConstraintValidationError(str(e), loc=[self.name]) from e
 
-			# (1/4) Cast to required type if cast_to is provided
+	def validate(self, value: Any, owner: type[Statica]) -> Any:
+		config: StaticaConfig = owner.__config__
 
+		try:
+			# (1) Cast to required type if cast_to is provided. A failing cast is a
+			# type error; this is scoped narrowly so it does not swallow ValueErrors
+			# raised by nested models' __post_init__ (which must propagate as-is).
 			if self.cast_to is not None:
-				value = self.cast_to(value)
+				try:
+					value = self.cast_to(value)
+				except (ValueError, TypeError) as e:
+					raise TypeValidationError(str(e), loc=[self.name]) from e
 
-			# (2/4) On dict assignments initialize Statica subclass if it exists
+			# (2) Validate type (also coerces codecs/enums and builds nested models)
+			value = validate_or_raise(value, self.expected_type, config, (self.name,))
 
-			if self.statica_sub_class is not None and isinstance(value, dict):
-				value = self.statica_sub_class.from_map(value)
-
-			# (3/4) Validate type of the value
-
-			validate_or_raise(value, self.expected_type, config=config)
-
-			# (4/4) Validate constraints if any are set
-
+			# (3) Validate constraints if any are set
 			value = validate_constraints(
 				self.name,
 				value,
@@ -208,31 +217,31 @@ class FieldDescriptor(Generic[T]):
 				config=config,
 			)
 
+			# (4) Run the custom field validator last, on a well-typed value
+			if self.validator is not None:
+				value = self._run_validator(value)
+
 		except TypeValidationError as e:
-			error_class = getattr(self.owner, "type_error_class", TypeValidationError)
-			raise error_class(str(e)) from e
+			e.root = owner.__name__
+			_reraise_as(e, getattr(owner, "type_error_class", TypeValidationError))
 
 		except ConstraintValidationError as e:
-			error_class = getattr(self.owner, "constraint_error_class", ConstraintValidationError)
-			raise error_class(str(e)) from e
-
-		except ValueError as e:
-			raise TypeValidationError(str(e)) from e
+			e.root = owner.__name__
+			_reraise_as(e, getattr(owner, "constraint_error_class", ConstraintValidationError))
 
 		return value
 
 
 def get_field_descriptors(cls: type[Statica]) -> list[FieldDescriptor[Any]]:
 	"""
-	Get all Field descriptors for a class.
-	Returns a list of FieldDescriptor instances.
+	Get all Field descriptors for a class, including inherited ones.
 
-	The list is computed once by the metaclass at class-creation time and
-	cached as `__field_descriptors__`, so repeated calls (e.g. from `from_map`
-	or `to_dict`) don't need to rescan the class namespace.
+	The list is computed once by the metaclass at class-creation time and cached
+	as `__field_descriptors__` (base fields first, then own fields), so repeated
+	calls (e.g. from `from_map` or `to_dict`) don't need to rescan the class.
 	"""
 
-	return cls.__field_descriptors__  # type: ignore[attr-defined]
+	return cls.__field_descriptors__
 
 
 ########################################################################################
@@ -249,6 +258,8 @@ def Field(
 	max_value: float | None = None,
 	strip_whitespace: bool | None = None,
 	cast_to: Callable[..., T] | None = None,
+	validator: Callable[[Any], Any] | None = None,
+	serializer: Callable[[Any], Any] | None = None,
 	alias: str | None = None,
 ) -> T: ...
 
@@ -262,6 +273,8 @@ def Field(
 	max_value: float | None = None,
 	strip_whitespace: bool | None = None,
 	cast_to: Callable[..., T] | None = None,
+	validator: Callable[[Any], Any] | None = None,
+	serializer: Callable[[Any], Any] | None = None,
 	alias: str | None = None,
 ) -> Any: ...
 
@@ -275,6 +288,8 @@ def Field(  # noqa: N802
 	max_value: float | None = None,
 	strip_whitespace: bool | None = None,
 	cast_to: Callable[..., T] | None = None,
+	validator: Callable[[Any], Any] | None = None,
+	serializer: Callable[[Any], Any] | None = None,
 	alias: str | None = None,
 ) -> Any:
 	"""
@@ -292,18 +307,128 @@ def Field(  # noqa: N802
 		max_value=max_value,
 		strip_whitespace=strip_whitespace,
 		cast_to=cast_to,
+		validator=validator,
+		serializer=serializer,
 		alias=alias,
 	)
+
+
+########################################################################################
+#### MARK: Generated methods
+
+
+def _statica_init(self: Statica, **kwargs: Any) -> None:
+	cls = type(self)
+	instance_dict = self.__dict__
+
+	for field_descriptor in cls.__field_descriptors__:
+		name = field_descriptor.name
+
+		if name in kwargs:
+			raw_value = kwargs[name]
+		elif field_descriptor.default is not None:
+			raw_value = field_descriptor.get_default_safe()
+		else:
+			raw_value = None
+
+		# Write straight to __dict__ so frozen instances can still be initialized.
+		instance_dict[name] = field_descriptor.validate(raw_value, cls)
+
+	post_init = getattr(cls, "__post_init__", None)
+	if post_init is not None:
+		post_init(self)
+
+
+def _field_values(obj: Any) -> tuple[Any, ...]:
+	"""Tuple of all field values, used for eq/order/hash."""
+
+	return tuple(getattr(obj, fd.name) for fd in type(obj).__field_descriptors__)
+
+
+def _statica_eq(self: Statica, other: object) -> Any:
+	if other.__class__ is not self.__class__:
+		return NotImplemented
+	return _field_values(self) == _field_values(other)
+
+
+def _statica_hash(self: Statica) -> int:
+	return hash(_field_values(self))
+
+
+def _statica_lt(self: Statica, other: object) -> Any:
+	if other.__class__ is not self.__class__:
+		return NotImplemented
+	return _field_values(self) < _field_values(other)
+
+
+def _statica_le(self: Statica, other: object) -> Any:
+	if other.__class__ is not self.__class__:
+		return NotImplemented
+	return _field_values(self) <= _field_values(other)
+
+
+def _statica_gt(self: Statica, other: object) -> Any:
+	if other.__class__ is not self.__class__:
+		return NotImplemented
+	return _field_values(self) > _field_values(other)
+
+
+def _statica_ge(self: Statica, other: object) -> Any:
+	if other.__class__ is not self.__class__:
+		return NotImplemented
+	return _field_values(self) >= _field_values(other)
+
+
+def _make_frozen_setattr(action: str) -> Callable[..., None]:
+	def _frozen(self: object, name: str, *_: Any) -> None:
+		msg = f"cannot {action} field {name!r} of frozen instance {type(self).__name__!r}"
+		raise FrozenInstanceError(msg)
+
+	return _frozen
 
 
 ########################################################################################
 #### MARK: Internal metaclass
 
 
-@dataclass_transform(kw_only_default=True)
+def _resolve(value: Any, bases: tuple[type, ...], attr: str, *, default: Any) -> Any:
+	"""Resolve a class argument, inheriting from the nearest base when unset."""
+
+	if value is not _UNSET:
+		return value
+	for base in bases:
+		if hasattr(base, attr):
+			return getattr(base, attr)
+	return default
+
+
+def _collect_field_descriptors(
+	bases: tuple[type, ...],
+	own: dict[str, FieldDescriptor[Any]],
+) -> list[FieldDescriptor[Any]]:
+	"""Merge inherited field descriptors (base-first) with own fields."""
+
+	merged: dict[str, FieldDescriptor[Any]] = {}
+	for base in reversed(bases):
+		for field_descriptor in getattr(base, "__field_descriptors__", []):
+			merged[field_descriptor.name] = field_descriptor
+	merged.update(own)
+	return list(merged.values())
+
+
+@dataclass_transform(
+	eq_default=True,
+	order_default=False,
+	kw_only_default=True,
+	frozen_default=False,
+)
 class StaticaMeta(type):
 	__config__: StaticaConfig
 	__field_descriptors__: list[FieldDescriptor[Any]]
+	__statica_init__: bool
+	__statica_frozen__: bool
+	__statica_eq__: bool
+	__statica_order__: bool
 	type_error_class: type[Exception] = TypeValidationError
 	constraint_error_class: type[Exception] = ConstraintValidationError
 
@@ -313,7 +438,11 @@ class StaticaMeta(type):
 		bases: tuple[type, ...],
 		namespace: dict[str, Any],
 		*,
-		config: StaticaConfig = default_config,
+		config: StaticaConfig = _UNSET,
+		init: bool = _UNSET,
+		frozen: bool = _UNSET,
+		eq: bool = _UNSET,
+		order: bool = _UNSET,
 	) -> type:
 		"""
 		Set up Field descriptors for each type-hinted attribute which does not have one
@@ -323,44 +452,56 @@ class StaticaMeta(type):
 		if name == "Statica":
 			return super().__new__(cls, name, bases, namespace)
 
+		# Resolve class arguments, inheriting from the nearest base when unset.
+		config = _resolve(config, bases, "__config__", default=default_config)
+		init = _resolve(init, bases, "__statica_init__", default=True)
+		frozen = _resolve(frozen, bases, "__statica_frozen__", default=False)
+		eq = _resolve(eq, bases, "__statica_eq__", default=True)
+		order = _resolve(order, bases, "__statica_order__", default=False)
+
 		namespace["__config__"] = config
+		namespace["__statica_init__"] = init
+		namespace["__statica_frozen__"] = frozen
+		namespace["__statica_eq__"] = eq
+		namespace["__statica_order__"] = order
 
 		annotations = _get_class_annotations(namespace)
 
-		# Generate custom __init__ method
-
-		def statica_init(self: Statica, **kwargs: Any) -> None:
-			for field_name in annotations:
-				field_descriptor = namespace.get(field_name)
-				assert isinstance(field_descriptor, FieldDescriptor)
-
-				# Use default value if key is missing and default is available
-				if field_name not in kwargs and field_descriptor.default is not None:
-					setattr(self, field_name, field_descriptor.get_default_safe())
-				else:
-					setattr(self, field_name, kwargs.get(field_name))
-
-		namespace["__init__"] = statica_init
-
-		# Set up Field descriptors for type-hinted attributes
-
+		# Set up Field descriptors for type-hinted attributes without one.
+		own_fields: dict[str, FieldDescriptor[Any]] = {}
 		for attr_annotated in annotations:
 			existing_value = namespace.get(attr_annotated)
+			if not isinstance(existing_value, FieldDescriptor):
+				existing_value = FieldDescriptor(default=existing_value)
+				namespace[attr_annotated] = existing_value
+			own_fields[attr_annotated] = existing_value
 
-			if isinstance(existing_value, FieldDescriptor):
-				# Case 1: name: Field[str] = Field(...) OR name: str = field(...)
-				# Both cases work - the Field is already there
-				continue
+		namespace["__field_descriptors__"] = _collect_field_descriptors(bases, own_fields)
 
-			# Case 3: name: str (no assignment) or name: Field[str] (no assignment)
-			# Create a Field descriptor with the default if it exists
-			namespace[attr_annotated] = FieldDescriptor(default=namespace.get(attr_annotated))
+		# Generate the __init__ method (unless the user opted out).
+		if init:
+			namespace["__init__"] = _statica_init
 
-		# Cache the list of Field descriptors so get_field_descriptors() doesn't need
-		# to rescan the class namespace on every call
-		namespace["__field_descriptors__"] = [
-			namespace[attr_annotated] for attr_annotated in annotations
-		]
+		# Frozen instances block attribute mutation after initialization.
+		if frozen:
+			namespace["__setattr__"] = _make_frozen_setattr("assign to")
+			namespace["__delattr__"] = _make_frozen_setattr("delete")
+		elif any(getattr(base, "__statica_frozen__", False) for base in bases):
+			# A frozen base would otherwise leak its blocking __setattr__/__delattr__.
+			namespace.setdefault("__setattr__", object.__setattr__)
+			namespace.setdefault("__delattr__", object.__delattr__)
+
+		# Value-based equality and hashing (mirrors dataclasses' rules).
+		if eq:
+			namespace["__eq__"] = _statica_eq
+			namespace["__hash__"] = _statica_hash if frozen else None
+
+		# Ordering operators.
+		if order:
+			namespace["__lt__"] = _statica_lt
+			namespace["__le__"] = _statica_le
+			namespace["__gt__"] = _statica_gt
+			namespace["__ge__"] = _statica_ge
 
 		return super().__new__(cls, name, bases, namespace)
 
@@ -392,9 +533,11 @@ class Statica(metaclass=StaticaMeta):
 		Otherwise, use the field names.
 		"""
 
-		result_dict = {}
+		cls = type(self)
+		config: StaticaConfig = cls.__config__
+		result_dict: dict[str, Any] = {}
 
-		for field_descriptor in get_field_descriptors(self.__class__):
+		for field_descriptor in get_field_descriptors(cls):
 			key_name = (
 				field_descriptor.alias
 				if with_aliases and field_descriptor.alias is not None
@@ -403,48 +546,38 @@ class Statica(metaclass=StaticaMeta):
 
 			field_value = getattr(self, field_descriptor.name)
 
-			# If the field is a Statica subclass, convert it to a dict
-			if isinstance(field_value, Statica):
-				field_value = field_value.to_dict(with_aliases=with_aliases)
-
-			result_dict[key_name] = field_value
+			if field_descriptor.serializer is not None:
+				result_dict[key_name] = field_descriptor.serializer(field_value)
+			else:
+				result_dict[key_name] = _serialize_value(
+					field_value,
+					config,
+					with_aliases=with_aliases,
+				)
 
 		return result_dict
 
 
-########################################################################################
-#### MARK: Main
+def _serialize_value(value: Any, config: StaticaConfig, *, with_aliases: bool) -> Any:
+	"""Recursively convert a field value into a JSON-friendly representation."""
 
-if __name__ == "__main__":
-	config = StaticaConfig.create(type_error_message="!!!!")
+	if isinstance(value, Statica):
+		return value.to_dict(with_aliases=with_aliases)
 
-	class User(Statica, config=config):
-		age: int = Field(min_value=0, max_value=120)
-		data: dict[str, int] | None
+	if isinstance(value, (list, tuple, set, frozenset)):
+		return [_serialize_value(item, config, with_aliases=with_aliases) for item in value]
 
-	u = User.from_map({"age": "-1"})
-	u2 = User(age=30, data={"key": 42})
+	if isinstance(value, dict):
+		return {
+			key: _serialize_value(item, config, with_aliases=with_aliases)
+			for key, item in value.items()
+		}
 
-	class Payload(Statica):
-		type_error_class = ValueError
+	if isinstance(value, Enum):
+		return value.value
 
-		name: str = Field(min_length=3, max_length=50, strip_whitespace=True)
-		description: str | None = Field(max_length=200)
-		num: int | float
-		float_num: float | None = Field(alias="floatNum")
+	codec = config.codecs.get(type(value))
+	if codec is not None:
+		return codec.encode(value)
 
-	data = {
-		"name": "Test Payload",
-		"description": "ddf",
-		"num": 5,
-		"floatNum": 5.5,
-	}
-
-	payload = Payload.from_map(data)
-
-	direct_init = Payload(
-		name="Test",
-		description="This is a test description.",
-		num=42,
-		float_num=3.14,
-	)
+	return value

@@ -1,4 +1,5 @@
 import unittest
+from collections.abc import Iterable
 from typing import Any
 
 from statica.core import Field, Statica
@@ -353,11 +354,9 @@ class TestValidateOrRaise(unittest.TestCase):
 		validate_or_raise([], list[dict[str, list[int]]])
 
 	def test_validate_unsupported_generic_type_failure(self) -> None:
-		"""Test validation failure for unsupported generic types"""
-		# This would test tuple or other unsupported generic types
-		# Note: This test assumes tuple is not supported based on the code
-		with self.assertRaisesRegex(TypeValidationError, r".*not supported.*"):
-			validate_or_raise((1, 2, 3), tuple[int, ...])
+		"""Bare Iterable[T] cannot be validated without consuming the iterable."""
+		with self.assertRaisesRegex(TypeValidationError, r".*unsupported.*"):
+			validate_or_raise([1, 2, 3], Iterable[int])
 
 	# Statica subclass tests
 	def test_validate_statica_instance_success(self) -> None:

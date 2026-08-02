@@ -17,14 +17,14 @@ class TestConfig(unittest.TestCase):
 			DefaultTest.from_map({"name": "John", "age": "not_int"})
 		self.assertIn("expected type 'int', got 'str'", str(cm.exception))
 
-		# Test constraint error with default message
+		# Test constraint error with default message (path-prefixed)
 		with self.assertRaises(ConstraintValidationError) as cm:
 			DefaultTest(name="Jo", age=25)
-		self.assertIn("name length must be at least 3", str(cm.exception))
+		self.assertIn("DefaultTest.name: length must be at least 3", str(cm.exception))
 
 		with self.assertRaises(ConstraintValidationError) as cm:
 			DefaultTest(name="John Doe", age=17)
-		self.assertIn("age must be at least 18", str(cm.exception))
+		self.assertIn("DefaultTest.age: must be at least 18", str(cm.exception))
 
 	def test_custom_config_type_error_message(self) -> None:
 		"""Test custom type error message configuration."""
@@ -198,7 +198,7 @@ class TestConfig(unittest.TestCase):
 		self.assertEqual(config1.type_error_message, "Custom type error")
 		self.assertEqual(
 			config1.min_length_error_message,
-			"{field_name} length must be at least {min_length}",
+			"length must be at least {min_length}",
 		)
 
 		# Test with multiple custom messages
