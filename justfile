@@ -30,6 +30,15 @@ publish:
 
 
 ########################################################################################
+#### MARK: Profiling
+
+
+alias p := profile
+profile:
+	sudo -E "$(command -v uv)" run --python 3.15 python -m profiling.sampling run --flamegraph --browser benchmark_creation.py
+
+
+########################################################################################
 #### MARK: Code Quality
 
 

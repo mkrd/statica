@@ -1,8 +1,6 @@
 import time
 from typing import Any
 
-import pyinstrument
-
 import statica
 
 test_data = {"name": "John Doe", "age": 30, "email": "john.doe@example.com", "salary": 75000.0}
@@ -29,10 +27,13 @@ if __name__ == "__main__":
 
 	print(f"Time to create 1,000,000 instances of {StaticaModel.__name__}: {creation_time} ms")
 
-	with pyinstrument.Profiler() as profiler:
-		benchmark_creation(StaticaModel)
-
-	profiler.open_in_browser()
+	# Profile this script with Tachyon, the statistical profiler shipped with
+	# Python 3.15 (`profiling.sampling`):
+	#
+	#   just profile
+	#
+	# Tachyon samples the whole process from the outside, so it needs no in-process
+	# instrumentation and adds virtually zero overhead.
 
 	# 2025-06-09 - main - 1204ms
 	# 2025-06-09 - nested-init - 1201ms

@@ -26,7 +26,6 @@ dependencies = []
 dev = [
 	"coverage ~= 7.15.0",
 	"pyrefly ~= 1.1.0",
-	"pyinstrument ~= 5.1.0",
 	"ruff ~= 0.15.0",
 ]
 
