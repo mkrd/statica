@@ -65,11 +65,15 @@ def validated_dataclass(
 	custom_error: type[Exception] = CustomError,
 ) -> Callable[[Callable], Callable]:
 	def decorator_validated_dataclass(cls: type):
-		def init(*args, **kwargs):
-			msg = "helo"
-			raise custom_error(msg)
+		def init(self, **kwargs):
+			for name in cls.__annotations__:
+				if name not in kwargs:
+					msg = f"missing field {name}"
+					raise custom_error(msg)
+				setattr(self, name, kwargs[name])
 
 		cls.__init__ = init
+		cls.to_dict = to_dict_func
 
 		return cls
 
@@ -88,5 +92,6 @@ MyClass(id=1).to_dict()
 ```
 
 
-As of June 2025, type checkers will not be able to understand that objects of type `MyClass` have a method `to_dict`.
+As of October 2026, type checkers will not be able to understand that objects of type `MyClass` have a method `to_dict`.
+Checked with pyrefly 1.3.2, mypy 2.4.0, ty 0.0.86 and pyright 1.1.414, all report that `MyClass` has no attribute `to_dict`.
 This could be reconsidered in the future, but for now, Statica uses inheritance to ensure that type checkers can properly infer types and methods.
