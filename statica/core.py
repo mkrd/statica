@@ -15,6 +15,8 @@ from typing import (
 	overload,
 )
 
+from typing_extensions import sentinel
+
 from statica.config import StaticaConfig, default_config
 from statica.exceptions import ConstraintValidationError, TypeValidationError
 from statica.validation import validate_constraints, validate_or_raise
@@ -23,6 +25,9 @@ if TYPE_CHECKING:
 	from collections.abc import Callable, Mapping
 
 T = TypeVar("T")
+
+MISSING = sentinel("MISSING")
+"""Marks a field without a default, and a field value that was not provided."""
 
 try:
 	from annotationlib import (
@@ -107,9 +112,15 @@ class FieldDescriptor(Generic[T]):
 	For example, if expected_type is `Union[Statica, int]`, then this will be `Statica`.
 	"""
 
+	accepts_none: bool = dataclass_field(init=False, repr=False)
+	"""
+	Whether None is a valid value for expected_type.
+	Fields without a default that accept None may be omitted and are then set to None.
+	"""
+
 	# User-facing dataclass fields
 
-	default: T | Any | None = None
+	default: T | MISSING = MISSING
 	min_length: int | None = None
 	max_length: int | None = None
 	min_value: float | None = None
@@ -125,6 +136,14 @@ class FieldDescriptor(Generic[T]):
 		self.expected_type = get_type_hints(owner)[name]
 		self.sub_types = self.get_sub_types(self.expected_type)
 		self.statica_sub_class = self.get_statica_subclass(self.sub_types)
+		self.accepts_none = self.get_accepts_none(self.expected_type)
+
+	def get_accepts_none(self, expected_type: Any) -> bool:
+		try:
+			validate_or_raise(None, expected_type)
+		except TypeValidationError:
+			return False
+		return True
 
 	def get_sub_types(self, expected_type: Any) -> tuple[type | Any, ...]:
 		"""
@@ -177,25 +196,37 @@ class FieldDescriptor(Generic[T]):
 
 		instance.__dict__[self.name] = self.validate(value)
 
+	def raise_if_required(self, config: StaticaConfig) -> None:
+		if self.accepts_none:
+			return
+		msg = config.missing_field_error_message.format(field_name=self.name)
+		raise TypeValidationError(msg)
+
 	def validate(self, value: Any) -> Any:
 		try:
 			config = self.owner.__config__  # type: ignore[attr-defined]
 
-			# (1/4) Cast to required type if cast_to is provided
+			# (1/5) Fields that were not provided are only valid if they accept None
+
+			if value is MISSING:
+				self.raise_if_required(config)
+				return None
+
+			# (2/5) Cast to required type if cast_to is provided
 
 			if self.cast_to is not None:
 				value = self.cast_to(value)
 
-			# (2/4) On dict assignments initialize Statica subclass if it exists
+			# (3/5) On dict assignments initialize Statica subclass if it exists
 
 			if self.statica_sub_class is not None and isinstance(value, dict):
 				value = self.statica_sub_class.from_map(value)
 
-			# (3/4) Validate type of the value
+			# (4/5) Validate type of the value
 
 			validate_or_raise(value, self.expected_type, config=config)
 
-			# (4/4) Validate constraints if any are set
+			# (5/5) Validate constraints if any are set
 
 			value = validate_constraints(
 				self.name,
@@ -268,7 +299,7 @@ def Field(
 
 def Field(  # noqa: N802
 	*,
-	default: T | Any | None = None,
+	default: T | MISSING = MISSING,
 	min_length: int | None = None,
 	max_length: int | None = None,
 	min_value: float | None = None,
@@ -334,11 +365,12 @@ class StaticaMeta(type):
 				field_descriptor = namespace.get(field_name)
 				assert isinstance(field_descriptor, FieldDescriptor)
 
-				# Use default value if key is missing and default is available
-				if field_name not in kwargs and field_descriptor.default is not None:
+				if field_name in kwargs:
+					setattr(self, field_name, kwargs[field_name])
+				elif field_descriptor.default is not MISSING:
 					setattr(self, field_name, field_descriptor.get_default_safe())
 				else:
-					setattr(self, field_name, kwargs.get(field_name))
+					setattr(self, field_name, MISSING)
 
 		namespace["__init__"] = statica_init
 
@@ -354,7 +386,9 @@ class StaticaMeta(type):
 
 			# Case 3: name: str (no assignment) or name: Field[str] (no assignment)
 			# Create a Field descriptor with the default if it exists
-			namespace[attr_annotated] = FieldDescriptor(default=namespace.get(attr_annotated))
+			namespace[attr_annotated] = FieldDescriptor(
+				default=namespace.get(attr_annotated, MISSING)
+			)
 
 		# Cache the list of Field descriptors so get_field_descriptors() doesn't need
 		# to rescan the class namespace on every call

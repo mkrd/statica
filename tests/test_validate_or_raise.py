@@ -39,6 +39,18 @@ class NestedProfile(Statica):
 
 
 class TestValidateOrRaise(unittest.TestCase):
+	def test_returns_value(self) -> None:
+		"""Test that the validated value is returned unchanged"""
+		tags = ["a", "b"]
+		self.assertIs(validate_or_raise(tags, list[str]), tags)
+		self.assertIsNone(validate_or_raise(None, int | None))
+
+	def test_generic_alias_with_union_message(self) -> None:
+		"""Test the error message names union item types"""
+		with self.assertRaises(TypeValidationError) as cm:
+			validate_or_raise("x", list[int | None])
+		self.assertIn("expected type 'list[int | None]', got 'str'", str(cm.exception))
+
 	# Basic type validation tests
 	def test_validate_int_success(self) -> None:
 		"""Test successful int validation"""

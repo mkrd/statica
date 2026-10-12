@@ -2,7 +2,7 @@ import unittest
 from typing import Literal
 
 from statica import Statica
-from statica.core import Field, FieldDescriptor
+from statica.core import MISSING, Field, FieldDescriptor
 
 NAME_MIN_LENGTH = 2
 NAME_MAX_LENGTH = 50
@@ -170,7 +170,7 @@ class TestDescriptor(unittest.TestCase):
 		self.assertIsInstance(d, FieldDescriptor)
 		self.assertEqual(d.name, "name")
 		self.assertIs(d.expected_type, str)
-		self.assertIsNone(d.default)
+		self.assertIs(d.default, MISSING)
 		self.assertIsNone(d.min_length)
 		self.assertIsNone(d.cast_to)
 		self.assertIsNone(d.alias)

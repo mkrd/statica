@@ -26,10 +26,14 @@ function, because `isinstance` does not support generic aliases directly.
 from __future__ import annotations
 
 from types import GenericAlias, UnionType
-from typing import Any, Literal, TypeGuard, Union
+from typing import Any, Literal, TypeGuard, TypeVar, Union, cast
+
+from typing_extensions import TypeForm
 
 from statica.config import StaticaConfig, default_config
 from statica.exceptions import ConstraintValidationError, TypeValidationError
+
+T = TypeVar("T")
 
 ########################################################################################
 #### MARK: Types
@@ -57,20 +61,39 @@ def is_union_generic_alias(expected_type: Any) -> TypeGuard[UnionGenericAlias]:
 	return hasattr(expected_type, "__origin__") and expected_type.__origin__ is Union
 
 
+def type_name(expected_type: Any) -> str:
+	"""Readable name of a type expression, e.g. `int` or `int | None`."""
+	if isinstance(expected_type, type):
+		return expected_type.__name__
+	return repr(expected_type)
+
+
 ########################################################################################
 #### MARK: Type Validation
 
 
 def validate_or_raise(
-	value: Any,
-	expected_type: type | UnionType | GenericAlias,
+	value: object,
+	expected_type: TypeForm[T],
 	config: StaticaConfig = default_config,
-) -> None:
+) -> T:
 	"""
 	Value can be a nested structure, where all dicts with have a Statica type hint
 	are already initialized Statica objects.
+
+	Returns the value, typed as `expected_type`:
+	`age = validate_or_raise(raw, int | None)` gives `age: int | None`.
 	"""
 
+	validate_type(value, expected_type, config)
+	return cast("T", value)
+
+
+def validate_type(
+	value: Any,
+	expected_type: Any,
+	config: StaticaConfig = default_config,
+) -> None:
 	# Handle typing.Any, which accepts any value
 
 	if expected_type is Any:
@@ -185,7 +208,7 @@ def validate_type_generic_alias(
 
 		if not isinstance(value, dict):
 			msg = config.type_error_message.format(
-				expected_type=f"dict[{key_type.__name__}, {value_type.__name__}]",
+				expected_type=f"dict[{type_name(key_type)}, {type_name(value_type)}]",
 				found_type=type(value).__name__,
 			)
 			raise TypeValidationError(msg)
@@ -198,7 +221,7 @@ def validate_type_generic_alias(
 
 		if not isinstance(value, list):
 			msg = config.type_error_message.format(
-				expected_type=f"list[{item_type.__name__}]",
+				expected_type=f"list[{type_name(item_type)}]",
 				found_type=type(value).__name__,
 			)
 			raise TypeValidationError(msg)
@@ -210,7 +233,7 @@ def validate_type_generic_alias(
 
 		if not isinstance(value, set):
 			msg = config.type_error_message.format(
-				expected_type=f"set[{item_type.__name__}]",
+				expected_type=f"set[{type_name(item_type)}]",
 				found_type=type(value).__name__,
 			)
 			raise TypeValidationError(msg)

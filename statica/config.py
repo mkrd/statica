@@ -6,6 +6,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True, slots=True)
 class StaticaConfig:
 	type_error_message: str
+	missing_field_error_message: str
 	min_length_error_message: str
 	max_length_error_message: str
 	min_value_error_message: str
@@ -16,6 +17,7 @@ class StaticaConfig:
 		cls,
 		*,
 		type_error_message: str = "expected type '{expected_type}', got '{found_type}'",
+		missing_field_error_message: str = "{field_name} is required",
 		min_length_error_message: str = "{field_name} length must be at least {min_length}",
 		max_length_error_message: str = "{field_name} length must be at most {max_length}",
 		min_value_error_message: str = "{field_name} must be at least {min_value}",
@@ -23,6 +25,7 @@ class StaticaConfig:
 	) -> StaticaConfig:
 		return cls(
 			type_error_message=type_error_message,
+			missing_field_error_message=missing_field_error_message,
 			min_length_error_message=min_length_error_message,
 			max_length_error_message=max_length_error_message,
 			min_value_error_message=min_value_error_message,
