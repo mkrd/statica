@@ -55,21 +55,22 @@ Define a model with type annotations and constraints:
 ```python
 from statica.core import Statica, Field
 
+
 class Payload(Statica):
-    name: str = Field(min_length=3, max_length=50, strip_whitespace=True)
-    description: str | None = Field(max_length=200)
-    num: int | float
-    float_num: float | None
+	name: str = Field(min_length=3, max_length=50, strip_whitespace=True)
+	description: str | None = Field(max_length=200)
+	num: int | float
+	float_num: float | None
 ```
 
 Instantiate the model using a dictionary:
 
 ```python
 data = {
-    "name": "Test Payload",
-    "description": "A short description.",
-    "num": 42,
-    "float_num": 3.14,
+	"name": "Test Payload",
+	"description": "A short description.",
+	"num": 42,
+	"float_num": 3.14,
 }
 
 payload = Payload.from_map(data)
@@ -80,10 +81,10 @@ Or instantiate directly:
 
 ```python
 payload = Payload(
-    name="Test",
-    description="This is a test description.",
-    num=42,
-    float_num=3.14,
+	name="Test",
+	description="This is a test description.",
+	num=42,
+	float_num=3.14,
 )
 ```
 
@@ -95,14 +96,14 @@ Statica automatically validates attributes based on type annotations and constra
 from statica.core import ConstraintValidationError, TypeValidationError
 
 try:
-    payload = Payload(name="Te", description="Valid", num=42)
+	payload = Payload(name="Te", description="Valid", num=42)
 except ConstraintValidationError as e:
-    print(e)  # Output: "name: length must be at least 3"
+	print(e)  # Output: "name: length must be at least 3"
 
 try:
-    payload = Payload(name="Test", description="Valid", num="Invalid")
+	payload = Payload(name="Test", description="Valid", num="Invalid")
 except TypeValidationError as e:
-    print(e)  # Output: "num: expected type 'int | float', got 'str'"
+	print(e)  # Output: "num: expected type 'int | float', got 'str'"
 ```
 
 ### Optional Fields
@@ -111,7 +112,8 @@ Fields annotated with `| None` are optional and default to `None`:
 
 ```python
 class OptionalPayload(Statica):
-    name: str | None
+	name: str | None
+
 
 payload = OptionalPayload()
 print(payload.name)  # Output: None
@@ -125,23 +127,24 @@ You can specify default values for fields in two ways:
 
 ```python
 class User(Statica):
-    name: str
-    age: int = Field(default=25)
-    active: bool = Field(default=True)
+	name: str
+	age: int = Field(default=25)
+	active: bool = Field(default=True)
+
 
 # Using direct initialization
 user = User(name="John")
-print(user.name)    # Output: "John"
-print(user.age)     # Output: 25
+print(user.name)  # Output: "John"
+print(user.age)  # Output: 25
 print(user.active)  # Output: True
 
 # Using from_map
 user = User.from_map({"name": "Jane"})
-print(user.age)     # Output: 25 (default used)
+print(user.age)  # Output: 25 (default used)
 
 # Explicit values override defaults
 user = User(name="Bob", age=30, active=False)
-print(user.age)     # Output: 30
+print(user.age)  # Output: 30
 ```
 
 #### Direct assignment (without Field)
@@ -150,15 +153,16 @@ You can also assign default values directly to fields without using `Field()`:
 
 ```python
 class Config(Statica):
-    name: str
-    timeout: float = 30.0      # Direct assignment
-    retries: int = 3           # Direct assignment
-    debug: bool = False        # Direct assignment
+	name: str
+	timeout: float = 30.0  # Direct assignment
+	retries: int = 3  # Direct assignment
+	debug: bool = False  # Direct assignment
+
 
 config = Config(name="server")
 print(config.timeout)  # Output: 30.0
-print(config.retries)   # Output: 3
-print(config.debug)     # Output: False
+print(config.retries)  # Output: 3
+print(config.debug)  # Output: False
 
 # Works with from_map too
 config = Config.from_map({"name": "api-server"})
@@ -173,8 +177,9 @@ Default values are validated against any constraints you've defined:
 
 ```python
 class Config(Statica):
-    timeout: float = Field(default=30.0, min_value=1.0, max_value=120.0)
-    retries: int = Field(default=3, min_value=1)
+	timeout: float = Field(default=30.0, min_value=1.0, max_value=120.0)
+	retries: int = Field(default=3, min_value=1)
+
 
 config = Config()  # Uses defaults: timeout=30.0, retries=3
 ```
@@ -183,8 +188,9 @@ For mutable default values (like lists, dicts, sets), Statica automatically crea
 
 ```python
 class UserProfile(Statica):
-    name: str
-    tags: list[str] = Field(default=[])  # or tags: list[str] = []
+	name: str
+	tags: list[str] = Field(default=[])  # or tags: list[str] = []
+
 
 user1 = UserProfile(name="Alice")
 user2 = UserProfile(name="Bob")
@@ -206,19 +212,21 @@ You can specify constraints and options on fields:
 
 ```python
 class StringTest(Statica):
-    name: str = Field(min_length=3, max_length=5, strip_whitespace=True)
+	name: str = Field(min_length=3, max_length=5, strip_whitespace=True)
+
 
 class IntTest(Statica):
-    num: int = Field(min_value=1, max_value=10, cast_to=int)
+	num: int = Field(min_value=1, max_value=10, cast_to=int)
+
 
 class DefaultTest(Statica):
-    # Using Field() for defaults with constraints
-    status: str = Field(default="active")
-    priority: int = Field(default=1, min_value=1, max_value=5)
+	# Using Field() for defaults with constraints
+	status: str = Field(default="active")
+	priority: int = Field(default=1, min_value=1, max_value=5)
 
-    # Direct assignment for simple defaults
-    timeout: float = 30.0
-    retries: int = 3
+	# Direct assignment for simple defaults
+	timeout: float = 30.0
+	retries: int = 3
 ```
 
 ### Custom Error Classes
@@ -227,17 +235,19 @@ You can define custom error classes for type and constraint validation:
 
 ```python
 class CustomError(Exception):
-    pass
+	pass
+
 
 class CustomPayload(Statica):
-    constraint_error_class = CustomError
+	constraint_error_class = CustomError
 
-    num: int = Field(min_value=1, max_value=10)
+	num: int = Field(min_value=1, max_value=10)
+
 
 try:
-    payload = CustomPayload(num=0)
+	payload = CustomPayload(num=0)
 except CustomError as e:
-    print(e)  # Output: "num: must be at least 1"
+	print(e)  # Output: "num: must be at least 1"
 ```
 
 Or, define a BaseClass which configures the error classes globally:
@@ -245,17 +255,20 @@ Or, define a BaseClass which configures the error classes globally:
 ```python
 from statica.core import Statica, ConstraintValidationError, TypeValidationError
 
+
 class BaseClass(Statica):
-    constraint_error_class = ConstraintValidationError
-    type_error_class = TypeValidationError
+	constraint_error_class = ConstraintValidationError
+	type_error_class = TypeValidationError
+
 
 class CustomPayload(BaseClass):
-    num: int = Field(min_value=1, max_value=10)
+	num: int = Field(min_value=1, max_value=10)
+
 
 try:
-    payload = CustomPayload(num=0)
+	payload = CustomPayload(num=0)
 except ConstraintValidationError as e:
-    print(e)  # Output: "num: must be at least 1"
+	print(e)  # Output: "num: must be at least 1"
 ```
 
 
@@ -269,14 +282,15 @@ Use the `alias` parameter to define an alternative name for both parsing and ser
 
 ```python
 class User(Statica):
-    full_name: str = Field(alias="fullName")
-    age: int = Field(alias="userAge", default=25)
+	full_name: str = Field(alias="fullName")
+	age: int = Field(alias="userAge", default=25)
+
 
 # Parse data with aliases
 data = {"fullName": "John Doe"}  # userAge not provided, uses default
 user = User.from_map(data)
 print(user.full_name)  # Output: "John Doe"
-print(user.age)        # Output: 25
+print(user.age)  # Output: 25
 
 # Serialize back with aliases (uses the alias for serialization by default)
 result = user.to_dict()
@@ -285,7 +299,6 @@ print(result)  # Output: {"fullName": "John Doe", "userAge": 25}
 # Serialize without aliases
 result_no_alias = user.to_dict(with_aliases=False)
 print(result_no_alias)  # Output: {"full_name": "John Doe", "age": 25}
-
 ```
 
 Advanced Usage
@@ -301,7 +314,8 @@ You can automatically cast input values to the desired type:
 
 ```python
 class CastingExample(Statica):
-    num: int = Field(cast_to=int)
+	num: int = Field(cast_to=int)
+
 
 instance = CastingExample(num="42")
 print(instance.num)  # Output: 42

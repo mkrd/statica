@@ -6,7 +6,7 @@ Statica uses inheritance to define models:
 
 ```python
 class MyModel(Statica):
-    name: str = Field(min_length=3, max_length=50)
+	name: str = Field(min_length=3, max_length=50)
 ```
 
 Under the hood, typing.dataclass_transform is used to tell the type checker that this is a dataclass-like class,
@@ -18,7 +18,7 @@ theoretically allowing a syntax that is more similar to the built-in dataclasses
 ```python
 @Statica
 class MyModel:
-    name: str = Field(min_length=3, max_length=50)
+	name: str = Field(min_length=3, max_length=50)
 ```
 
 However, this comes with drawbacks.
