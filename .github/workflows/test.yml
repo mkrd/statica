@@ -57,7 +57,7 @@ jobs:
         run: just ruff-check
 
       - name: 🔎 Ruff format checks
-        run: just ruff-format
+        run: just ruff-format-check
 
       - name: 🐍 Static Type Checker
         run: just typecheck

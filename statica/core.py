@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import sys
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from types import UnionType
@@ -24,14 +25,8 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
-try:
-	from annotationlib import (
-		Format,  # type: ignore[missing-module-attribute]
-		call_annotate_function,  # type: ignore[missing-module-attribute]
-		get_annotate_from_class_namespace,  # type: ignore[missing-module-attribute]
-	)
-except ImportError:  # Python < 3.14 has no annotationlib
-	Format, call_annotate_function, get_annotate_from_class_namespace = None, None, None
+if sys.version_info >= (3, 14):
+	from annotationlib import Format, call_annotate_function, get_annotate_from_class_namespace
 
 
 def _get_class_annotations(namespace: dict[str, Any]) -> dict[str, Any]:
@@ -45,11 +40,7 @@ def _get_class_annotations(namespace: dict[str, Any]) -> dict[str, Any]:
 	helper supports both the old and new behavior.
 	"""
 
-	if (
-		Format is not None
-		and call_annotate_function is not None
-		and get_annotate_from_class_namespace is not None
-	):
+	if sys.version_info >= (3, 14):
 		annotate = get_annotate_from_class_namespace(namespace)
 		if annotate is not None:
 			return call_annotate_function(annotate, Format.FORWARDREF)
@@ -179,7 +170,7 @@ class FieldDescriptor(Generic[T]):
 
 	def validate(self, value: Any) -> Any:
 		try:
-			config = self.owner.__config__  # type: ignore[attr-defined]
+			config = self.owner.__config__
 
 			# (1/4) Cast to required type if cast_to is provided
 
@@ -232,7 +223,7 @@ def get_field_descriptors(cls: type[Statica]) -> list[FieldDescriptor[Any]]:
 	or `to_dict`) don't need to rescan the class namespace.
 	"""
 
-	return cls.__field_descriptors__  # type: ignore[attr-defined]
+	return cls.__field_descriptors__
 
 
 ########################################################################################
