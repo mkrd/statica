@@ -13,34 +13,28 @@ classifiers = [
 	"Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
-
-########################################################################################
+##########################################################################################
 #### MARK: Dependencies
-
 
 requires-python = ">=3.11, <3.16"
 
 dependencies = []
 
 [dependency-groups]
-dev = ["coverage ~= 7.16.0", "pyrefly ~= 1.4.0", "ruff ~= 0.17.0"]
+dev = ["coverage ~= 7.17.0", "pyrefly ~= 1.4.0", "ruff ~= 0.17.0"]
 
-
-########################################################################################
+##########################################################################################
 #### MARK: Build System
 
-
 [build-system]
-requires = ["uv_build>=0.13.0,<0.14.0"]
+requires = ["uv_build>=0.13,<0.14"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-root = ""
 
-
-########################################################################################
+##########################################################################################
 #### MARK: Ruff
-
 
 [tool.ruff]
 show-fixes = true
@@ -67,23 +61,24 @@ ignore = [
 indent-style = "tab"
 quote-style = "double"
 
+############################################################################################
+#### MARK: Pyrefly
 
-########################################################################################
+[tool.pyrefly]
+min-severity = "warn"
+preset = "strict"
+python-version = "3.11"
+
+[tool.pyrefly.errors]
+implicit-any-lambda = "ignore"
+
+##########################################################################################
 #### MARK: Testing
 
-
 [tool.coverage.run]
+branch = true
+data_file = ".cache/coverage"
 source = ["statica"]
 
 [tool.coverage.report]
-omit = ["benchmark_*.py"]
-exclude_also = ["if TYPE_CHECKING:", 'if __name__ == "__main__":']
-
-
-########################################################################################
-#### MARK: Pyrefly
-
-
-[tool.pyrefly]
-preset = "strict"
-min-severity = "warn"
+show_missing = true
