@@ -82,7 +82,7 @@ jobs:
           name: coverage-3.12
           include-hidden-files: true
           if-no-files-found: error
-          path: ".coverage"
+          path: ".cache/coverage"
 
   # MARK: Badge Job
 
@@ -114,6 +114,7 @@ jobs:
 
       - name: Generate Coverage Badge
         run: |
+          cp .cache/coverage .coverage
           ls -la .coverage* || echo "No .coverage file found"
           uv run --with coverage --with genbadge[coverage] -- coverage xml
           uv run --with coverage --with genbadge[coverage] -- genbadge coverage -i coverage.xml -o assets/coverage.svg
