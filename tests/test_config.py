@@ -26,6 +26,26 @@ class TestConfig(unittest.TestCase):
 			DefaultTest(name="John Doe", age=17)
 		self.assertIn("age must be at least 18", str(cm.exception))
 
+	def test_default_type_error_messages_name_types_readably(self) -> None:
+		class Model(Statica):
+			num: int | float | None = None
+			counts: dict[str, int | None] | None = None
+			items: list[int] = Field(default=[])
+
+		# Building the message for a failed union member must not crash
+		self.assertIsNone(Model().counts)
+
+		cases = {
+			"num": ("x", "expected type 'int | float | None', got 'str'"),
+			"counts": (5, "expected type 'dict[str, int | None] | None', got 'int'"),
+			"items": (5, "expected type 'list[int]', got 'int'"),
+		}
+		for field_name, (invalid_value, expected_message) in cases.items():
+			with self.subTest(field_name):
+				with self.assertRaises(TypeValidationError) as cm:
+					Model.from_map({field_name: invalid_value})
+				self.assertEqual(str(cm.exception), expected_message)
+
 	def test_custom_config_type_error_message(self) -> None:
 		"""Test custom type error message configuration."""
 

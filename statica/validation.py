@@ -60,6 +60,16 @@ def is_union(expected_type: Any) -> bool:
 	)
 
 
+def type_name(expected_type: Any) -> str:
+	"""Readable name for error messages, e.g. `int`, `list[str]`, `dict[str, int | None]`."""
+
+	if expected_type is type(None):
+		return "None"
+	if isinstance(expected_type, type):
+		return expected_type.__name__
+	return str(expected_type)
+
+
 ########################################################################################
 #### MARK: Type Validation
 
@@ -106,7 +116,7 @@ def validate_or_raise(
 		return
 
 	msg = config.type_error_message.format(
-		expected_type=expected_type.__name__,
+		expected_type=type_name(expected_type),
 		found_type=type(value).__name__,
 	)
 	raise TypeValidationError(msg)
@@ -143,7 +153,7 @@ def validate_union(
 			return  # Exit if one of the members matches
 
 	msg = config.type_error_message.format(
-		expected_type=members,
+		expected_type=" | ".join(type_name(member) for member in members),
 		found_type=type(value).__name__,
 	)
 	raise TypeValidationError(msg)
@@ -161,7 +171,7 @@ def validate_type_generic_alias(
 
 		if not isinstance(value, dict):
 			msg = config.type_error_message.format(
-				expected_type=f"dict[{key_type.__name__}, {value_type.__name__}]",
+				expected_type=type_name(expected_type),
 				found_type=type(value).__name__,
 			)
 			raise TypeValidationError(msg)
@@ -174,7 +184,7 @@ def validate_type_generic_alias(
 
 		if not isinstance(value, list):
 			msg = config.type_error_message.format(
-				expected_type=f"list[{item_type.__name__}]",
+				expected_type=type_name(expected_type),
 				found_type=type(value).__name__,
 			)
 			raise TypeValidationError(msg)
@@ -186,7 +196,7 @@ def validate_type_generic_alias(
 
 		if not isinstance(value, set):
 			msg = config.type_error_message.format(
-				expected_type=f"set[{item_type.__name__}]",
+				expected_type=type_name(expected_type),
 				found_type=type(value).__name__,
 			)
 			raise TypeValidationError(msg)
@@ -195,7 +205,7 @@ def validate_type_generic_alias(
 
 	else:
 		msg = config.type_error_message.format(
-			expected_type=expected_type.__name__,
+			expected_type=type_name(expected_type),
 			found_type=type(value).__name__ + " (not supported)",
 		)
 		raise TypeValidationError(msg)

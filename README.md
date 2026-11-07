@@ -98,12 +98,12 @@ from statica.core import ConstraintValidationError, TypeValidationError
 try:
 	payload = Payload(name="Te", description="Valid", num=42)
 except ConstraintValidationError as e:
-	print(e)  # Output: "name: length must be at least 3"
+	print(e)  # Output: "name length must be at least 3"
 
 try:
 	payload = Payload(name="Test", description="Valid", num="Invalid")
 except TypeValidationError as e:
-	print(e)  # Output: "num: expected type 'int | float', got 'str'"
+	print(e)  # Output: "expected type 'int | float', got 'str'"
 ```
 
 ### Optional Fields
@@ -247,7 +247,7 @@ class CustomPayload(Statica):
 try:
 	payload = CustomPayload(num=0)
 except CustomError as e:
-	print(e)  # Output: "num: must be at least 1"
+	print(e)  # Output: "num must be at least 1"
 ```
 
 Or, define a BaseClass which configures the error classes globally:
@@ -268,7 +268,7 @@ class CustomPayload(BaseClass):
 try:
 	payload = CustomPayload(num=0)
 except ConstraintValidationError as e:
-	print(e)  # Output: "num: must be at least 1"
+	print(e)  # Output: "num must be at least 1"
 ```
 
 
