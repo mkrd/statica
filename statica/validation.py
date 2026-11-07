@@ -46,15 +46,18 @@ def is_literal_generic_alias(expected_type: Any) -> TypeGuard[LiteralGenericAlia
 	return hasattr(expected_type, "__origin__") and expected_type.__origin__ is Literal
 
 
-class UnionGenericAlias:
-	"""A type used in place of typing._UnionGenericAlias to avoid private imports."""
+def is_union(expected_type: Any) -> bool:
+	"""
+	True for both union spellings, `X | Y` and `typing.Union[X, Y]` / `Optional[X]`.
+	They are distinct types before Python 3.14 and the same type from 3.14 on.
 
-	__origin__ = Union
-	__args__: tuple[Any, ...]
+	Runs on every validation, so it avoids `typing.get_origin`, which made
+	instance creation about 45% slower in `benchmark_creation.py`.
+	"""
 
-
-def is_union_generic_alias(expected_type: Any) -> TypeGuard[UnionGenericAlias]:
-	return hasattr(expected_type, "__origin__") and expected_type.__origin__ is Union
+	return (
+		isinstance(expected_type, UnionType) or getattr(expected_type, "__origin__", None) is Union
+	)
 
 
 ########################################################################################
@@ -63,10 +66,13 @@ def is_union_generic_alias(expected_type: Any) -> TypeGuard[UnionGenericAlias]:
 
 def validate_or_raise(
 	value: Any,
-	expected_type: type | UnionType | GenericAlias,
+	expected_type: Any,
 	config: StaticaConfig = default_config,
 ) -> None:
 	"""
+	`expected_type` is any type expression the grammar above allows, typed as `Any`
+	like the result of `typing.get_type_hints`.
+
 	Value can be a nested structure, where all dicts with have a Statica type hint
 	are already initialized Statica objects.
 	"""
@@ -82,22 +88,16 @@ def validate_or_raise(
 		validate_type_generic_alias(value, expected_type, config)
 		return
 
-	# Handle parameterized generic types
+	# Handle union types
 
-	if is_union_generic_alias(expected_type):
-		validate_type_union_generic_alias(value, expected_type, config)
+	if is_union(expected_type):
+		validate_union(value, expected_type.__args__, config)
 		return
 
 	# Handle Literal (e.g. Literal["a", "b"], with any number and type of values)
 
 	if is_literal_generic_alias(expected_type):
 		validate_literal(value, expected_type)
-		return
-
-	# Handle union types
-
-	if isinstance(expected_type, UnionType):
-		validate_type_union(value, expected_type, config)
 		return
 
 	# Handle all other types
@@ -125,49 +125,25 @@ def validate_literal(
 		raise TypeValidationError(msg)
 
 
-def validate_type_union(
+def validate_union(
 	value: Any,
-	expected_type: UnionType,
+	members: tuple[Any, ...],
 	config: StaticaConfig = default_config,
 ) -> None:
 	"""
-	Validate that the value matches one of the types in the UnionType.
-	Throws TypeValidationError if the type does not match any of the union types.
+	Validate that the value matches one of the union members.
+	Throws TypeValidationError if the value does not match any of them.
 	"""
-	for sub_type in expected_type.__args__:
+	for member in members:
 		try:
-			validate_or_raise(value, sub_type)
+			validate_or_raise(value, member, config)
 		except TypeValidationError:
-			continue  # Try the next sub-type
+			continue  # Try the next member
 		else:
-			return  # Exit if one of the sub-types matches
+			return  # Exit if one of the members matches
 
 	msg = config.type_error_message.format(
-		expected_type=expected_type.__args__,
-		found_type=type(value).__name__,
-	)
-	raise TypeValidationError(msg)
-
-
-def validate_type_union_generic_alias(
-	value: Any,
-	expected_type: UnionGenericAlias,
-	config: StaticaConfig = default_config,
-) -> None:
-	"""
-	Validate that the value matches one of the types in the UnionGenericAlias.
-	Throws TypeValidationError if the type does not match any of the union types.
-	"""
-	for sub_type in expected_type.__args__:
-		try:
-			validate_or_raise(value, sub_type, config)
-		except TypeValidationError:
-			continue  # Try the next sub-type
-		else:
-			return  # Exit if one of the sub-types matches
-
-	msg = config.type_error_message.format(
-		expected_type=expected_type.__args__,
+		expected_type=members,
 		found_type=type(value).__name__,
 	)
 	raise TypeValidationError(msg)

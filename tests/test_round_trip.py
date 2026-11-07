@@ -1,12 +1,17 @@
 """Tests for serialization round-trip: from_map -> to_dict -> from_map."""
 
 import unittest
+from typing import Optional
 
 from statica import Field, Statica
 
 AGE_30 = 30
 AGE_25 = 25
 SCORE_95 = 95
+
+
+class NestedValue(Statica):
+	value: str
 
 
 class TestRoundTrip(unittest.TestCase):
@@ -178,6 +183,25 @@ class TestRoundTrip(unittest.TestCase):
 		instance2 = Outer.from_map(result)
 		self.assertEqual(instance2.name, "Hank")
 		self.assertIsNone(instance2.inner)
+
+	def test_round_trip_typing_optional_nested(self) -> None:
+		class Outer(Statica):
+			# The `typing.Optional` spelling is a distinct type before Python 3.14
+			inner: Optional[NestedValue]  # noqa: UP045
+
+		data = {"inner": {"value": "x"}}
+		instance = Outer.from_map(data)
+		self.assertIsInstance(instance.inner, NestedValue)
+		self.assertEqual(instance.to_dict(), data)
+
+	def test_round_trip_nested_in_union_with_generic(self) -> None:
+		class Outer(Statica):
+			inner: list[int] | NestedValue
+
+		data = {"inner": {"value": "x"}}
+		instance = Outer.from_map(data)
+		self.assertIsInstance(instance.inner, NestedValue)
+		self.assertEqual(instance.to_dict(), data)
 
 	def test_round_trip_to_dict_without_aliases_then_back(self) -> None:
 		"""Test from_map with aliased data, to_dict without aliases, verify field names."""

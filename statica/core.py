@@ -4,7 +4,6 @@ import copy
 import sys
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from types import UnionType
 from typing import (
 	TYPE_CHECKING,
 	Any,
@@ -18,7 +17,7 @@ from typing import (
 
 from statica.config import StaticaConfig, default_config
 from statica.exceptions import ConstraintValidationError, TypeValidationError
-from statica.validation import validate_constraints, validate_or_raise
+from statica.validation import is_union, validate_constraints, validate_or_raise
 
 if TYPE_CHECKING:
 	from collections.abc import Callable, Mapping
@@ -85,12 +84,6 @@ class FieldDescriptor(Generic[T]):
 	Example 2: `<class 'int'>` for a field `number: int`.
 	"""
 
-	sub_types: tuple[type, ...] = dataclass_field(init=False, default_factory=tuple)
-	"""
-	List of types that expected_type is composed of.
-	If expected_type is not of type UnionType, then it is just a tuple with one element.
-	"""
-
 	statica_sub_class: type[Statica] | None = dataclass_field(init=False, repr=False)
 	"""
 	Statica subclass if the expected_type is a Statica subclass or a union where one
@@ -114,33 +107,7 @@ class FieldDescriptor(Generic[T]):
 		self.name = name
 		self.owner = owner
 		self.expected_type = get_type_hints(owner)[name]
-		self.sub_types = self.get_sub_types(self.expected_type)
-		self.statica_sub_class = self.get_statica_subclass(self.sub_types)
-
-	def get_sub_types(self, expected_type: Any) -> tuple[type | Any, ...]:
-		"""
-		Get all subtypes of the expected type.
-		For example, if the expected type is Union[str, int], return [str, int].
-		"""
-
-		if type(expected_type) is UnionType:
-			return tuple(t for t in expected_type.__args__)
-
-		return (expected_type,)
-
-	def get_statica_subclass(self, sub_types: tuple[type, ...]) -> type[Statica] | None:
-		"""
-		Get the first Statica subclass from the sub_types.
-		Returns None if no Statica subclass is found.
-		"""
-
-		try:
-			for sub_type in sub_types:
-				if issubclass(sub_type, Statica):
-					return sub_type
-		except TypeError:
-			pass
-		return None
+		self.statica_sub_class = get_statica_subclass(self.expected_type)
 
 	def get_default_safe(self) -> Any:
 		"""
@@ -211,6 +178,21 @@ class FieldDescriptor(Generic[T]):
 			raise TypeValidationError(str(e)) from e
 
 		return value
+
+
+def get_statica_subclass(expected_type: Any) -> type[Statica] | None:
+	"""
+	Get the first Statica subclass among the union members of the expected type.
+	Returns None if no Statica subclass is found.
+	"""
+
+	members = expected_type.__args__ if is_union(expected_type) else (expected_type,)
+
+	for member in members:
+		# Members like `list[int]` or `Literal["a"]` are not classes, `issubclass` rejects them
+		if isinstance(member, type) and issubclass(member, Statica):
+			return member
+	return None
 
 
 def get_field_descriptors(cls: type[Statica]) -> list[FieldDescriptor[Any]]:
