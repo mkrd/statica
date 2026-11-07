@@ -3,7 +3,7 @@
 import unittest
 
 from statica import Field, Statica
-from statica.exceptions import ConstraintValidationError
+from statica.exceptions import ConstraintValidationError, TypeValidationError
 
 SCORE_MAX = 100
 FIXED_VALUE = 42
@@ -276,3 +276,70 @@ class TestConstraintsEdgeCases(unittest.TestCase):
 
 		with self.assertRaises(ConstraintValidationError):
 			Model.from_map({"name": "Alice", "score": 150})
+
+	def test_string_field_with_length_constraints(self) -> None:
+		class StringTest(Statica):
+			name: str = Field(min_length=3, max_length=5)
+
+		instance = StringTest.from_map({"name": "Test"})
+		self.assertEqual(instance.name, "Test")
+
+		with self.assertRaises(ConstraintValidationError) as cm:
+			StringTest.from_map({"name": "Te"})
+		self.assertIn("length must be at least 3", str(cm.exception))
+
+		with self.assertRaises(ConstraintValidationError) as cm:
+			StringTest.from_map({"name": "Testing"})
+		self.assertIn("length must be at most 5", str(cm.exception))
+
+	def test_string_field_with_whitespace_stripping(self) -> None:
+		class StringTest(Statica):
+			name: str = Field(strip_whitespace=True, max_length=4)
+
+		instance = StringTest.from_map({"name": " Test "})
+		self.assertEqual(instance.name, "Test")
+
+		with self.assertRaises(ConstraintValidationError) as cm:
+			StringTest.from_map({"name": " TestLong "})
+		self.assertIn("length must be at most 4", str(cm.exception))
+
+	def test_integer_field_with_value_constraints(self) -> None:
+		class IntTest(Statica):
+			num: int = Field(min_value=1, max_value=10)
+
+		num = 5
+
+		instance = IntTest.from_map({"num": num})
+		self.assertEqual(instance.num, num)
+
+		with self.assertRaises(ConstraintValidationError) as cm:
+			IntTest.from_map({"num": 0})
+		self.assertIn("must be at least 1", str(cm.exception))
+
+		with self.assertRaises(ConstraintValidationError) as cm:
+			IntTest.from_map({"num": 11})
+		self.assertIn("must be at most 10", str(cm.exception))
+
+	def test_custom_error_class(self) -> None:
+		class CustomError(Exception):
+			pass
+
+		class IntTest(Statica):
+			constraint_error_class = CustomError
+
+			num: int = Field(min_value=1, max_value=10)
+
+		with self.assertRaises(CustomError) as cm:
+			IntTest.from_map({"num": 0})
+		self.assertIn("must be at least 1", str(cm.exception))
+
+		class FloatTest(Statica):
+			num: float = Field(min_value=1, max_value=10)
+
+		num_float = 5.5
+
+		instance = FloatTest.from_map({"num": num_float})
+		self.assertEqual(instance.num, num_float)
+
+		with self.assertRaises(TypeValidationError):
+			FloatTest.from_map({"num": "4"})

@@ -29,10 +29,7 @@ MAX_PAGE_SIZE = 100
 HTTP_OK = 200
 HTTP_NOT_FOUND = 404
 DEFAULT_CURRENCY = "EUR"
-PRODUCT_PRICE = 29.99
-PRODUCT_QUANTITY = 3
 DISCOUNT_PERCENT = 10.0
-ORDER_TOTAL = 89.97
 LAT_BERLIN = 52.52
 LON_BERLIN = 13.405
 SENSOR_TEMP = 22.5
@@ -88,13 +85,6 @@ class PageMeta(Statica):
 		max_value=MAX_PAGE_SIZE,
 	)
 	total_items: int = Field(alias="totalItems", min_value=0)
-
-
-class ProductItem(Statica):
-	sku: str = Field(alias="productSku", min_length=1)
-	name: str = Field(alias="productName", min_length=1, max_length=MAX_NAME_LEN)
-	price: float = Field(alias="unitPrice", min_value=0.0)
-	in_stock: bool = Field(alias="inStock")
 
 
 class ProductListResponse(Statica):
