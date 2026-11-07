@@ -10,7 +10,7 @@ class MyModel(Statica):
 ```
 
 Under the hood, typing.dataclass_transform is used to tell the type checker that this is a dataclass-like class,
-allowing for type checking and IDE support for the generated init mehod.
+allowing for type checking and IDE support for the generated init method.
 
 Additionally, typing.dataclass_transform also works with decorators,
 theoretically allowing a syntax that is more similar to the built-in dataclasses:

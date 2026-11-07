@@ -53,7 +53,7 @@ Getting Started
 Define a model with type annotations and constraints:
 
 ```python
-from statica.core import Statica, Field
+from statica import Field, Statica
 
 
 class Payload(Statica):
@@ -93,7 +93,7 @@ payload = Payload(
 Statica automatically validates attributes based on type annotations and constraints:
 
 ```python
-from statica.core import ConstraintValidationError, TypeValidationError
+from statica import ConstraintValidationError, TypeValidationError
 
 try:
 	payload = Payload(name="Te", description="Valid", num=42)
@@ -205,7 +205,8 @@ print(user2.tags)  # Output: [] (not affected)
 You can specify constraints and options on fields:
 
 - **Default Values**: `default` (using `Field()`) or direct assignment
-- **String Constraints**: `min_length`, `max_length`, `strip_whitespace`
+- **Length Constraints** (`str`, `list`, `tuple`, `dict`): `min_length`, `max_length`
+- **String Options**: `strip_whitespace`
 - **Numeric Constraints**: `min_value`, `max_value`
 - **Casting**: `cast_to`
 - **Aliasing**: `alias`
@@ -253,7 +254,7 @@ except CustomError as e:
 Or, define a BaseClass which configures the error classes globally:
 
 ```python
-from statica.core import Statica, ConstraintValidationError, TypeValidationError
+from statica import ConstraintValidationError, Statica, TypeValidationError
 
 
 class BaseClass(Statica):
@@ -328,15 +329,22 @@ Design Decisions
 - [Inheritance over Decorators](docs/decision-inheritance-over-decorators.md)
 
 
-Contributing
+Development
 ----------------------------------------------------------------------------------------
 
-We welcome contributions to Statica! To contribute:
+Statica supports Python 3.11 to 3.15. Development uses [uv](https://docs.astral.sh/uv/) and [just](https://just.systems/):
 
-1. Fork the repository.
-2. Create a new branch for your feature or bug fix.
-3. Write tests for your changes.
-4. Submit a pull request.
+```bash
+uv sync                               # Install the dev dependencies
+just check                            # Fix lint and formatting, type-check, run tests with coverage
+uv run python benchmark_creation.py   # Time the creation of 1,000,000 instances
+```
+
+Use `uv sync` to set up, not `just install`: that recipe also sets the maintainer's git identity.
+
+To read the code, start with `statica/core.py` (`Statica`, `StaticaMeta`, `FieldDescriptor`), then `statica/validation.py`.
+
+Contributions are welcome: fork the repository, add tests for your change, and open a pull request.
 
 
 License

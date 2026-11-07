@@ -83,7 +83,7 @@ def validate_or_raise(
 	`expected_type` is any type expression the grammar above allows, typed as `Any`
 	like the result of `typing.get_type_hints`.
 
-	Value can be a nested structure, where all dicts with have a Statica type hint
+	Value can be a nested structure, where all dicts with a Statica type hint
 	are already initialized Statica objects.
 	"""
 
@@ -92,7 +92,7 @@ def validate_or_raise(
 	if expected_type is Any:
 		return
 
-	# Handle generic aliases if native python types, e.g. list[int], dict[str, int]
+	# Handle generic aliases of native python types, e.g. list[int], dict[str, int]
 
 	if isinstance(expected_type, GenericAlias):
 		validate_type_generic_alias(value, expected_type, config)

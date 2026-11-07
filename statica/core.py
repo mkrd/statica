@@ -334,8 +334,8 @@ class StaticaMeta(type):
 				namespace[attr_annotated] = copy.copy(existing_value)
 				continue
 
-			# Case 3: name: str (no assignment) or name: Field[str] (no assignment)
-			# Create a Field descriptor with the default if it exists
+			# A field without Field(), like `name: str` or `timeout: float = 30.0`.
+			# The assigned value, if any, becomes the default.
 			namespace[attr_annotated] = FieldDescriptor(default=namespace.get(attr_annotated))
 
 		# Collect all fields, parents first. A field redeclared in this class keeps its
@@ -372,11 +372,8 @@ class Statica(metaclass=StaticaMeta):
 
 	def to_dict(self, *, with_aliases: bool = True) -> dict[str, Any]:
 		"""
-		Convert the instance to a dictionary, using the field names as keys.
-
-		Args:
-		- `with_aliases`: If True, use field aliases as keys if they exist.
-		Otherwise, use the field names.
+		Convert the instance to a dictionary. A field's key is its alias if it has one
+		and `with_aliases` is True, otherwise its name.
 		"""
 
 		result_dict = {}
