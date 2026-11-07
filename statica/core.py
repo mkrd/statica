@@ -144,10 +144,14 @@ class FieldDescriptor(Generic[T]):
 		try:
 			config = model_class.__config__
 
-			# (1/4) Cast to required type if cast_to is provided
+			# (1/4) Cast to required type if cast_to is provided.
+			# None marks a missing value, so an optional field stays None.
 
-			if self.cast_to is not None:
-				value = self.cast_to(value)
+			if self.cast_to is not None and value is not None:
+				try:
+					value = self.cast_to(value)
+				except (ValueError, TypeError) as e:
+					raise TypeValidationError(str(e)) from e
 
 			# (2/4) On dict assignments initialize Statica subclass if it exists
 
@@ -176,9 +180,6 @@ class FieldDescriptor(Generic[T]):
 
 		except ConstraintValidationError as e:
 			raise model_class.constraint_error_class(str(e)) from e
-
-		except ValueError as e:
-			raise TypeValidationError(str(e)) from e
 
 		return value
 

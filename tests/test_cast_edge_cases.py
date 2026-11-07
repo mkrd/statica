@@ -73,18 +73,35 @@ class TestCastEdgeCases(unittest.TestCase):
 		class Model(Statica):
 			count: int = Field(cast_to=int)
 
-		with self.assertRaises((TypeValidationError, TypeError)):
+		with self.assertRaises(TypeValidationError):
 			Model(count=None)  # type: ignore[arg-type]
+		with self.assertRaises(TypeValidationError):
+			Model()  # type: ignore[call-arg]
 
 	def test_cast_to_with_none_on_optional_field(self) -> None:
 		"""Test cast_to with None on optional field (None should be passed through)."""
 
 		class Model(Statica):
 			count: int | None = Field(cast_to=int)
+			nickname: str | None = Field(cast_to=str)
 
-		# Casting None to int raises TypeError, which gets caught
-		with self.assertRaises((TypeValidationError, TypeError)):
-			Model(count=None)
+		self.assertIsNone(Model(count=None).count)
+		self.assertIsNone(Model().count)
+		self.assertIsNone(Model().nickname)
+
+	def test_cast_to_failure_raises_custom_type_error_class(self) -> None:
+		class CustomError(Exception):
+			pass
+
+		class Model(Statica):
+			type_error_class = CustomError
+			count: int = Field(cast_to=int)
+			tags: set[str] = Field(cast_to=set)
+
+		with self.assertRaises(CustomError):
+			Model(count="not_a_number", tags=set())  # type: ignore[arg-type]
+		with self.assertRaises(CustomError):
+			Model(count=1, tags=1)  # type: ignore[arg-type]
 
 	def test_cast_to_with_constraints(self) -> None:
 		"""Test that cast_to is applied before constraint validation."""
