@@ -156,6 +156,26 @@ class TestConfig(unittest.TestCase):
 		self.assertIn("Union error: expected one of", str(cm.exception))
 		self.assertIn("got float", str(cm.exception))
 
+	def test_custom_type_error_message_for_collection_items(self) -> None:
+		custom_config = StaticaConfig.create(type_error_message="Custom: {found_type}")
+
+		class CollectionTest(Statica, config=custom_config):
+			# Valid defaults, so each case below fails only on the field it sets
+			items: list[int] = Field(default=[])
+			tags: set[str] = Field(default=set())
+			counts: dict[str, int] = Field(default={})
+
+		invalid_values = {
+			"items": ["a"],
+			"tags": {1},
+			"counts": {"a": "b"},
+		}
+		for field_name, invalid_value in invalid_values.items():
+			with self.subTest(field_name):
+				with self.assertRaises(TypeValidationError) as cm:
+					CollectionTest.from_map({field_name: invalid_value})
+				self.assertIn("Custom:", str(cm.exception))
+
 	def test_config_with_list_and_dict_constraints(self) -> None:
 		"""Test custom configuration with list and dict length constraints."""
 

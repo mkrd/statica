@@ -128,7 +128,7 @@ def validate_literal(
 def validate_union(
 	value: Any,
 	members: tuple[Any, ...],
-	config: StaticaConfig = default_config,
+	config: StaticaConfig,
 ) -> None:
 	"""
 	Validate that the value matches one of the union members.
@@ -152,7 +152,7 @@ def validate_union(
 def validate_type_generic_alias(
 	value: Any,
 	expected_type: GenericAlias,
-	config: StaticaConfig = default_config,
+	config: StaticaConfig,
 ) -> None:
 	origin = expected_type.__origin__
 
@@ -166,8 +166,8 @@ def validate_type_generic_alias(
 			)
 			raise TypeValidationError(msg)
 		for key, val in value.items():
-			validate_or_raise(key, key_type)
-			validate_or_raise(val, value_type)
+			validate_or_raise(key, key_type, config)
+			validate_or_raise(val, value_type, config)
 
 	elif origin is list:
 		item_type = expected_type.__args__[0]
@@ -179,7 +179,7 @@ def validate_type_generic_alias(
 			)
 			raise TypeValidationError(msg)
 		for item in value:
-			validate_or_raise(item, item_type)
+			validate_or_raise(item, item_type, config)
 
 	elif origin is set:
 		item_type = expected_type.__args__[0]
@@ -191,7 +191,7 @@ def validate_type_generic_alias(
 			)
 			raise TypeValidationError(msg)
 		for item in value:
-			validate_or_raise(item, item_type)
+			validate_or_raise(item, item_type, config)
 
 	else:
 		msg = config.type_error_message.format(
