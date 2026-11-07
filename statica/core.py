@@ -127,17 +127,22 @@ class FieldDescriptor(Generic[T]):
 			return self  # Accessed on the class, return the descriptor
 		return instance.__dict__.get(self.name)
 
-	def __set__(self, instance: object, value: T) -> None:
+	def __set__(self, instance: Statica, value: T) -> None:
 		"""
 		Set the value of the field on the instance.
 		For example user.age = 30 will invoke this method.
 		"""
 
-		instance.__dict__[self.name] = self.validate(value)
+		vars(instance)[self.name] = self.validate(value, type(instance))
 
-	def validate(self, value: Any) -> Any:
+	def validate(self, value: Any, model_class: type[Statica]) -> Any:
+		"""
+		Takes config and error classes from `model_class`, the class of the instance, so a
+		field inherited from a parent uses the settings of the child.
+		"""
+
 		try:
-			config = self.owner.__config__
+			config = model_class.__config__
 
 			# (1/4) Cast to required type if cast_to is provided
 
@@ -167,12 +172,10 @@ class FieldDescriptor(Generic[T]):
 			)
 
 		except TypeValidationError as e:
-			error_class = getattr(self.owner, "type_error_class", TypeValidationError)
-			raise error_class(str(e)) from e
+			raise model_class.type_error_class(str(e)) from e
 
 		except ConstraintValidationError as e:
-			error_class = getattr(self.owner, "constraint_error_class", ConstraintValidationError)
-			raise error_class(str(e)) from e
+			raise model_class.constraint_error_class(str(e)) from e
 
 		except ValueError as e:
 			raise TypeValidationError(str(e)) from e
@@ -273,6 +276,17 @@ def Field(  # noqa: N802
 #### MARK: Internal metaclass
 
 
+def statica_init(self: Statica, **kwargs: Any) -> None:
+	"""The `__init__` of every Statica subclass, set by StaticaMeta."""
+
+	for field_descriptor in type(self).__field_descriptors__:
+		if field_descriptor.name in kwargs:
+			value = kwargs[field_descriptor.name]
+		else:
+			value = field_descriptor.get_default_safe()
+		setattr(self, field_descriptor.name, value)
+
+
 @dataclass_transform(kw_only_default=True)
 class StaticaMeta(type):
 	__config__: StaticaConfig
@@ -286,34 +300,27 @@ class StaticaMeta(type):
 		bases: tuple[type, ...],
 		namespace: dict[str, Any],
 		*,
-		config: StaticaConfig = default_config,
+		config: StaticaConfig | None = None,
 	) -> type:
 		"""
 		Set up Field descriptors for each type-hinted attribute which does not have one
 		already, but only for subclasses of Statica.
 		"""
 
-		if name == "Statica":
+		# The root class Statica has no fields and holds the default config
+		if not bases:
+			root_field_descriptors: list[FieldDescriptor[Any]] = []
+			namespace["__config__"] = default_config
+			namespace["__field_descriptors__"] = root_field_descriptors
 			return super().__new__(cls, name, bases, namespace)
 
-		namespace["__config__"] = config
-
-		annotations = _get_class_annotations(namespace)
-
-		# Generate custom __init__ method
-
-		def statica_init(self: Statica, **kwargs: Any) -> None:
-			for field_name in annotations:
-				field_descriptor = namespace.get(field_name)
-				assert isinstance(field_descriptor, FieldDescriptor)
-
-				# Use default value if key is missing and default is available
-				if field_name not in kwargs and field_descriptor.default is not None:
-					setattr(self, field_name, field_descriptor.get_default_safe())
-				else:
-					setattr(self, field_name, kwargs.get(field_name))
+		# Without an explicit config, the class inherits the config of its parent
+		if config is not None:
+			namespace["__config__"] = config
 
 		namespace["__init__"] = statica_init
+
+		annotations = _get_class_annotations(namespace)
 
 		# Set up Field descriptors for type-hinted attributes
 
@@ -329,11 +336,16 @@ class StaticaMeta(type):
 			# Create a Field descriptor with the default if it exists
 			namespace[attr_annotated] = FieldDescriptor(default=namespace.get(attr_annotated))
 
-		# Cache the list of Field descriptors so get_field_descriptors() doesn't need
-		# to rescan the class namespace on every call
-		namespace["__field_descriptors__"] = [
-			namespace[attr_annotated] for attr_annotated in annotations
-		]
+		# Collect all fields, parents first. A field redeclared in this class keeps its
+		# position and takes this class's descriptor.
+		descriptors_by_name: dict[str, FieldDescriptor[Any]] = {}
+		for base in reversed(bases):
+			if isinstance(base, StaticaMeta):
+				descriptors_by_name |= {
+					inherited.name: inherited for inherited in base.__field_descriptors__
+				}
+		descriptors_by_name |= {field_name: namespace[field_name] for field_name in annotations}
+		namespace["__field_descriptors__"] = list(descriptors_by_name.values())
 
 		return super().__new__(cls, name, bases, namespace)
 

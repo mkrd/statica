@@ -2,6 +2,7 @@
 
 import unittest
 
+import statica
 from statica import Field, Statica, TypeValidationError
 from statica.config import StaticaConfig
 from statica.exceptions import ConstraintValidationError
@@ -16,8 +17,6 @@ SCORE_85 = 85
 
 
 class TestInheritance(unittest.TestCase):
-	# xfail: Metaclass does not propagate parent fields through __init__
-	@unittest.expectedFailure
 	def test_basic_inheritance(self) -> None:
 		"""Test that a subclass inherits parent fields."""
 
@@ -31,8 +30,6 @@ class TestInheritance(unittest.TestCase):
 		self.assertEqual(child.name, "Alice")
 		self.assertEqual(child.age, AGE_30)
 
-	# xfail: Metaclass does not propagate parent fields through from_map
-	@unittest.expectedFailure
 	def test_inheritance_from_map(self) -> None:
 		"""Test that from_map works with inherited fields."""
 
@@ -46,8 +43,6 @@ class TestInheritance(unittest.TestCase):
 		self.assertEqual(child.name, "Bob")
 		self.assertEqual(child.age, AGE_25)
 
-	# xfail: Metaclass does not propagate parent fields through to_dict
-	@unittest.expectedFailure
 	def test_inheritance_to_dict(self) -> None:
 		"""Test that to_dict includes inherited fields."""
 
@@ -61,8 +56,6 @@ class TestInheritance(unittest.TestCase):
 		result = child.to_dict()
 		self.assertEqual(result, {"name": "Charlie", "age": AGE_40})
 
-	# xfail: Metaclass does not propagate parent fields through __init__
-	@unittest.expectedFailure
 	def test_inheritance_with_defaults(self) -> None:
 		"""Test that inherited fields with defaults work in subclass."""
 
@@ -87,13 +80,12 @@ class TestInheritance(unittest.TestCase):
 			score: int = Field(min_value=0, max_value=100)
 
 		child = Child(name="Eve", score=SCORE_85)
+		self.assertEqual(child.name, "Eve")
 		self.assertEqual(child.score, SCORE_85)
 
 		with self.assertRaises(ConstraintValidationError):
 			Child(name="Eve", score=150)
 
-	# xfail: Parent fields not validated in subclass
-	@unittest.expectedFailure
 	def test_inheritance_parent_validation_preserved(self) -> None:
 		"""Test that parent field validation is preserved in subclass."""
 
@@ -109,8 +101,6 @@ class TestInheritance(unittest.TestCase):
 		with self.assertRaises(TypeValidationError):
 			Child(name="Alice", age="thirty")  # type: ignore[arg-type]
 
-	# xfail: Missing parent field not detected in subclass
-	@unittest.expectedFailure
 	def test_inheritance_missing_required_parent_field(self) -> None:
 		"""Test that missing required parent fields raise errors."""
 
@@ -123,8 +113,6 @@ class TestInheritance(unittest.TestCase):
 		with self.assertRaises(TypeValidationError):
 			Child(age=AGE_30)  # type: ignore[call-arg]
 
-	# xfail: Parent fields not propagated in multi-level inheritance
-	@unittest.expectedFailure
 	def test_multi_level_inheritance(self) -> None:
 		"""Test three levels of inheritance: A -> B -> C."""
 
@@ -146,8 +134,6 @@ class TestInheritance(unittest.TestCase):
 		result = instance.to_dict()
 		self.assertEqual(result, {"x": x_val, "y": y_val, "z": z_val})
 
-	# xfail: Metaclass does not propagate parent fields through multi-level from_map
-	@unittest.expectedFailure
 	def test_multi_level_inheritance_from_map(self) -> None:
 		"""Test from_map with three levels of inheritance."""
 
@@ -166,8 +152,6 @@ class TestInheritance(unittest.TestCase):
 		self.assertEqual(instance.y, y_val)
 		self.assertEqual(instance.z, z_val)
 
-	# xfail: Parent fields not propagated via from_map with aliases
-	@unittest.expectedFailure
 	def test_inheritance_with_aliases(self) -> None:
 		"""Test that aliases work with inherited fields."""
 
@@ -201,6 +185,26 @@ class TestInheritance(unittest.TestCase):
 			Child(name="Alice", age="thirty")  # type: ignore[arg-type]
 		self.assertIn("Custom:", str(cm.exception))
 
+		# The child's config also applies to fields declared on the parent
+		with self.assertRaises(TypeValidationError) as cm:
+			Child(name=123, age=AGE_30)  # type: ignore[arg-type]
+		self.assertIn("Custom:", str(cm.exception))
+
+	def test_inheritance_config_inherited_from_base(self) -> None:
+		custom_config = StaticaConfig.create(
+			type_error_message="Custom: expected {expected_type}, got {found_type}",
+		)
+
+		class Base(Statica, config=custom_config):
+			name: str
+
+		class Child(Base):
+			age: int
+
+		with self.assertRaises(TypeValidationError) as cm:
+			Child(name="Alice", age="thirty")  # type: ignore[arg-type]
+		self.assertIn("Custom:", str(cm.exception))
+
 	def test_inheritance_with_custom_error_class(self) -> None:
 		"""Test that subclass can override error classes."""
 
@@ -217,8 +221,26 @@ class TestInheritance(unittest.TestCase):
 		with self.assertRaises(CustomError):
 			Child(name="Alice", age="thirty")  # type: ignore[arg-type]
 
-	# xfail: Metaclass does not propagate parent fields with nested Statica
-	@unittest.expectedFailure
+		# The child's error class also applies to fields declared on the parent
+		with self.assertRaises(CustomError):
+			Child(name=123, age=AGE_30)  # type: ignore[arg-type]
+
+	def test_inheritance_error_classes_inherited_from_base(self) -> None:
+		class CustomError(Exception):
+			pass
+
+		class Base(Statica):
+			constraint_error_class = CustomError
+			name: str = Field(min_length=3)
+
+		class Child(Base):
+			score: int = Field(min_value=0)
+
+		with self.assertRaises(CustomError):
+			Child(name="Al", score=SCORE_85)
+		with self.assertRaises(CustomError):
+			Child(name="Alice", score=-1)
+
 	def test_inheritance_with_nested_statica(self) -> None:
 		"""Test inheritance where child has a nested Statica field."""
 
@@ -238,8 +260,6 @@ class TestInheritance(unittest.TestCase):
 		result = child.to_dict()
 		self.assertEqual(result, {"name": "Grace", "address": {"city": "Berlin"}})
 
-	# xfail: Metaclass does not propagate parent optional fields
-	@unittest.expectedFailure
 	def test_inheritance_with_optional_parent_fields(self) -> None:
 		"""Test inheritance where parent has optional fields."""
 
@@ -271,3 +291,26 @@ class TestInheritance(unittest.TestCase):
 
 		with self.assertRaises(ConstraintValidationError):
 			StrictChild(name="Al", age=AGE_30)
+
+	def test_subclass_named_statica(self) -> None:
+		class Statica(statica.Statica):
+			name: str
+
+		self.assertEqual(Statica(name="Ivy").name, "Ivy")
+		with self.assertRaises(TypeValidationError):
+			Statica(name=123)  # type: ignore[arg-type]
+
+	def test_inheritance_with_plain_mixin(self) -> None:
+		class GreetingMixin:
+			def greet(self) -> str:
+				return "hello"
+
+		class Base(Statica):
+			name: str
+
+		class Child(GreetingMixin, Base):
+			age: int
+
+		child = Child(name="Jo", age=AGE_30)
+		self.assertEqual(child.to_dict(), {"name": "Jo", "age": AGE_30})
+		self.assertEqual(child.greet(), "hello")
