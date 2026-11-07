@@ -229,7 +229,7 @@ def validate_constraints(
 	max_length: int | None = None,
 	min_value: float | None = None,
 	max_value: float | None = None,
-	strip_whitespace: bool | None = None,
+	strip_whitespace: bool = False,
 	config: StaticaConfig = default_config,
 ) -> Any:
 	"""
@@ -250,7 +250,7 @@ def validate_constraints(
 		and max_length is None
 		and min_value is None
 		and max_value is None
-		and strip_whitespace is None
+		and not strip_whitespace
 	):
 		return value
 

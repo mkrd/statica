@@ -50,7 +50,7 @@ class TestConfig(unittest.TestCase):
 	def test_custom_config_type_error_message(self) -> None:
 		"""Test custom type error message configuration."""
 
-		custom_config = StaticaConfig.create(
+		custom_config = StaticaConfig(
 			type_error_message="{found_type} is not {expected_type}",
 		)
 
@@ -69,7 +69,7 @@ class TestConfig(unittest.TestCase):
 	def test_custom_config_length_error_messages(self) -> None:
 		"""Test custom length constraint error messages."""
 
-		custom_config = StaticaConfig.create(
+		custom_config = StaticaConfig(
 			min_length_error_message="{field_name} < {min_length}",
 			max_length_error_message="{field_name} < {max_length}",
 		)
@@ -91,7 +91,7 @@ class TestConfig(unittest.TestCase):
 	def test_custom_config_value_error_messages(self) -> None:
 		"""Test custom value constraint error messages."""
 
-		custom_config = StaticaConfig.create(
+		custom_config = StaticaConfig(
 			min_value_error_message="{field_name} < {min_value}",
 			max_value_error_message="{field_name} > {max_value}",
 		)
@@ -113,7 +113,7 @@ class TestConfig(unittest.TestCase):
 	def test_custom_config_with_from_map(self) -> None:
 		"""Test that custom configuration works with from_map method."""
 
-		custom_config = StaticaConfig.create(
+		custom_config = StaticaConfig(
 			type_error_message="from_map error: expected {expected_type}, got {found_type}",
 			min_length_error_message="from_map: {field_name} needs at least {min_length} chars",
 		)
@@ -135,11 +135,11 @@ class TestConfig(unittest.TestCase):
 	def test_custom_config_with_nested_statica(self) -> None:
 		"""Test that custom configuration works with nested Statica objects."""
 
-		inner_config = StaticaConfig.create(
+		inner_config = StaticaConfig(
 			type_error_message="Inner error: expected {expected_type}, got {found_type}",
 		)
 
-		outer_config = StaticaConfig.create(
+		outer_config = StaticaConfig(
 			type_error_message="Outer error: expected {expected_type}, got {found_type}",
 		)
 
@@ -163,7 +163,7 @@ class TestConfig(unittest.TestCase):
 	def test_config_with_union_types(self) -> None:
 		"""Test custom configuration with union types."""
 
-		custom_config = StaticaConfig.create(
+		custom_config = StaticaConfig(
 			type_error_message="Union error: expected one of {expected_type}, got {found_type}",
 		)
 
@@ -178,7 +178,7 @@ class TestConfig(unittest.TestCase):
 		self.assertIn("got float", str(cm.exception))
 
 	def test_custom_type_error_message_for_collection_items(self) -> None:
-		custom_config = StaticaConfig.create(type_error_message="Custom: {found_type}")
+		custom_config = StaticaConfig(type_error_message="Custom: {found_type}")
 
 		class CollectionTest(Statica, config=custom_config):
 			# Valid defaults, so each case below fails only on the field it sets
@@ -198,7 +198,7 @@ class TestConfig(unittest.TestCase):
 				self.assertIn("Custom:", str(cm.exception))
 
 	def test_literal_error_message(self) -> None:
-		custom_config = StaticaConfig.create(
+		custom_config = StaticaConfig(
 			literal_error_message="{value} is not one of {allowed_values}",
 		)
 
@@ -226,7 +226,7 @@ class TestConfig(unittest.TestCase):
 	def test_config_with_list_and_dict_constraints(self) -> None:
 		"""Test custom configuration with list and dict length constraints."""
 
-		custom_config = StaticaConfig.create(
+		custom_config = StaticaConfig(
 			min_length_error_message=(
 				"Collection {field_name} must have at least {min_length} items"
 			),
@@ -257,11 +257,11 @@ class TestConfig(unittest.TestCase):
 			CollectionTest(tags=["valid"], metadata={f"key{i}": f"value{i}" for i in range(4)})
 		self.assertIn("Collection metadata can have at most 3 items", str(cm.exception))
 
-	def test_config_create_method_defaults(self) -> None:
-		"""Test that StaticaConfig.create() method works with partial parameters."""
+	def test_error_messages_defaults(self) -> None:
+		"""Messages not passed to StaticaConfig() keep their default text."""
 
 		# Test with only one custom message
-		config1 = StaticaConfig.create(type_error_message="Custom type error")
+		config1 = StaticaConfig(type_error_message="Custom type error")
 		self.assertEqual(config1.type_error_message, "Custom type error")
 		self.assertEqual(
 			config1.min_length_error_message,
@@ -269,7 +269,7 @@ class TestConfig(unittest.TestCase):
 		)
 
 		# Test with multiple custom messages
-		config2 = StaticaConfig.create(
+		config2 = StaticaConfig(
 			min_length_error_message="Custom min length",
 			max_value_error_message="Custom max value",
 		)
@@ -283,7 +283,7 @@ class TestConfig(unittest.TestCase):
 	def test_config_immutability(self) -> None:
 		"""Test that StaticaConfig instances are immutable (frozen dataclass)."""
 
-		config = StaticaConfig.create(type_error_message="Custom message")
+		config = StaticaConfig(type_error_message="Custom message")
 
 		# Should not be able to modify frozen dataclass
 		with self.assertRaises(AttributeError):

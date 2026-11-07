@@ -98,7 +98,7 @@ class FieldDescriptor(Generic[T]):
 	max_length: int | None = None
 	min_value: float | None = None
 	max_value: float | None = None
-	strip_whitespace: bool | None = None
+	strip_whitespace: bool = False
 	cast_to: Callable[..., T] | None = None
 
 	alias: str | None = None
@@ -211,7 +211,7 @@ def Field(
 	max_length: int | None = None,
 	min_value: float | None = None,
 	max_value: float | None = None,
-	strip_whitespace: bool | None = None,
+	strip_whitespace: bool = False,
 	cast_to: Callable[..., T] | None = None,
 	alias: str | None = None,
 ) -> T: ...
@@ -224,7 +224,7 @@ def Field(
 	max_length: int | None = None,
 	min_value: float | None = None,
 	max_value: float | None = None,
-	strip_whitespace: bool | None = None,
+	strip_whitespace: bool = False,
 	cast_to: Callable[..., T] | None = None,
 	alias: str | None = None,
 ) -> Any: ...
@@ -237,7 +237,7 @@ def Field(  # noqa: N802
 	max_length: int | None = None,
 	min_value: float | None = None,
 	max_value: float | None = None,
-	strip_whitespace: bool | None = None,
+	strip_whitespace: bool = False,
 	cast_to: Callable[..., T] | None = None,
 	alias: str | None = None,
 ) -> Any:

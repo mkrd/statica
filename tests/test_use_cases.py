@@ -145,7 +145,7 @@ class WebhookEndpoint(Statica):
 # ---------------------------------------------------------------------------
 
 
-sensor_config = StaticaConfig.create(
+sensor_config = StaticaConfig(
 	type_error_message="Sensor validation: expected {expected_type}, got {found_type}",
 )
 

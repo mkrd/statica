@@ -26,7 +26,7 @@ Features
 - **Type Validation**: Automatically validates types for attributes based on type hints.
 - **Constraint Validation**: Define constraints like minimum/maximum length, value ranges, and more.
 - **Default Field Values**: Set default values for fields that are used when not explicitly provided.
-- **Customizable Error Handling**: Use custom exception classes for type and constraint errors.
+- **Customizable Error Handling**: Use custom exception classes and message templates for type and constraint errors.
 - **Flexible Field Descriptors**: Add constraints, casting, and other behaviors to your fields.
 - **Optional Fields**: Support for optional fields with default values.
 - **Automatic Initialization**: Automatically generate constructors (`__init__`) for your models.
@@ -271,6 +271,40 @@ try:
 except ConstraintValidationError as e:
 	print(e)  # Output: "num must be at least 1"
 ```
+
+### Custom Error Messages
+
+Pass a `StaticaConfig` with the `config` class keyword to change the message templates of a model. Subclasses use the messages of their parent unless they pass their own.
+
+```python
+from statica import Field, Statica, StaticaConfig, TypeValidationError
+
+messages = StaticaConfig(
+	type_error_message="{found_type} is not {expected_type}",
+	min_value_error_message="{field_name} is below {min_value}",
+)
+
+
+class Order(Statica, config=messages):
+	quantity: int = Field(min_value=1)
+
+
+try:
+	Order(quantity="three")
+except TypeValidationError as e:
+	print(e)  # Output: "str is not int"
+```
+
+Messages that are not passed keep their default text. Each template can use these placeholders:
+
+| Message | Placeholders |
+|:--|:--|
+| `type_error_message` | `{expected_type}`, `{found_type}` |
+| `literal_error_message` | `{allowed_values}`, `{value}` |
+| `min_length_error_message` | `{field_name}`, `{min_length}` |
+| `max_length_error_message` | `{field_name}`, `{max_length}` |
+| `min_value_error_message` | `{field_name}`, `{min_value}` |
+| `max_value_error_message` | `{field_name}`, `{max_value}` |
 
 
 Aliasing

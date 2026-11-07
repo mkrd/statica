@@ -171,7 +171,7 @@ class TestInheritance(unittest.TestCase):
 	def test_inheritance_with_custom_config(self) -> None:
 		"""Test that subclass can use a different config."""
 
-		custom_config = StaticaConfig.create(
+		custom_config = StaticaConfig(
 			type_error_message="Custom: expected {expected_type}, got {found_type}",
 		)
 
@@ -191,7 +191,7 @@ class TestInheritance(unittest.TestCase):
 		self.assertIn("Custom:", str(cm.exception))
 
 	def test_inheritance_config_inherited_from_base(self) -> None:
-		custom_config = StaticaConfig.create(
+		custom_config = StaticaConfig(
 			type_error_message="Custom: expected {expected_type}, got {found_type}",
 		)
 
