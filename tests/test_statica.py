@@ -211,3 +211,22 @@ class TestStatica(unittest.TestCase):
 
 		instance = Empty()
 		self.assertEqual(instance.to_dict(), {})
+
+	def test_reused_field_object(self) -> None:
+		non_empty = Field(min_length=1)
+
+		class First(Statica):
+			title: str = non_empty
+			label: str = non_empty
+
+		class Second(Statica):
+			count: list[int] = non_empty
+
+		self.assertEqual(First(title="a", label="b").to_dict(), {"title": "a", "label": "b"})
+		self.assertEqual(Second(count=[1]).to_dict(), {"count": [1]})
+
+		# Each field keeps its own type and the shared constraint
+		with self.assertRaises(TypeValidationError):
+			First(title=1, label="b")  # type: ignore[arg-type]
+		with self.assertRaises(ConstraintValidationError):
+			Second(count=[])

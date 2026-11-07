@@ -329,8 +329,9 @@ class StaticaMeta(type):
 			existing_value = namespace.get(attr_annotated)
 
 			if isinstance(existing_value, FieldDescriptor):
-				# Case 1: name: Field[str] = Field(...) OR name: str = field(...)
-				# Both cases work - the Field is already there
+				# A Field() object can be reused for several fields, and __set_name__
+				# binds a descriptor to one field, so each field gets its own copy
+				namespace[attr_annotated] = copy.copy(existing_value)
 				continue
 
 			# Case 3: name: str (no assignment) or name: Field[str] (no assignment)
