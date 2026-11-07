@@ -19,8 +19,8 @@
 
 		// Python Testing Configuration
 
-		"python.testing.pytestArgs": ["tests"],
-		"python.testing.unittestEnabled": false,
-		"python.testing.pytestEnabled": true
+		"python.testing.unittestArgs": ["-s", "tests", "-t", "."],
+		"python.testing.unittestEnabled": true,
+		"python.testing.pytestEnabled": false
 	}
 }

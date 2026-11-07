@@ -34,6 +34,3 @@ if __name__ == "__main__":
 	#
 	# Tachyon samples the whole process from the outside, so it needs no in-process
 	# instrumentation and adds virtually zero overhead.
-
-	# 2025-06-09 - main - 1204ms
-	# 2025-06-09 - nested-init - 1201ms
