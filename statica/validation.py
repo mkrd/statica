@@ -74,7 +74,7 @@ def type_name(expected_type: Any) -> str:
 #### MARK: Type Validation
 
 
-def validate_or_raise(
+def validate_type(
 	value: Any,
 	expected_type: Any,
 	config: StaticaConfig = default_config,
@@ -95,7 +95,7 @@ def validate_or_raise(
 	# Handle generic aliases of native python types, e.g. list[int], dict[str, int]
 
 	if isinstance(expected_type, GenericAlias):
-		validate_type_generic_alias(value, expected_type, config)
+		validate_collection_type(value, expected_type, config)
 		return
 
 	# Handle union types
@@ -146,7 +146,7 @@ def validate_union(
 	"""
 	for member in members:
 		try:
-			validate_or_raise(value, member, config)
+			validate_type(value, member, config)
 		except TypeValidationError:
 			continue  # Try the next member
 		else:
@@ -159,7 +159,7 @@ def validate_union(
 	raise TypeValidationError(msg)
 
 
-def validate_type_generic_alias(
+def validate_collection_type(
 	value: Any,
 	expected_type: GenericAlias,
 	config: StaticaConfig,
@@ -176,8 +176,8 @@ def validate_type_generic_alias(
 			)
 			raise TypeValidationError(msg)
 		for key, val in value.items():
-			validate_or_raise(key, key_type, config)
-			validate_or_raise(val, value_type, config)
+			validate_type(key, key_type, config)
+			validate_type(val, value_type, config)
 
 	elif origin is list:
 		item_type = expected_type.__args__[0]
@@ -189,7 +189,7 @@ def validate_type_generic_alias(
 			)
 			raise TypeValidationError(msg)
 		for item in value:
-			validate_or_raise(item, item_type, config)
+			validate_type(item, item_type, config)
 
 	elif origin is set:
 		item_type = expected_type.__args__[0]
@@ -201,7 +201,7 @@ def validate_type_generic_alias(
 			)
 			raise TypeValidationError(msg)
 		for item in value:
-			validate_or_raise(item, item_type, config)
+			validate_type(item, item_type, config)
 
 	else:
 		msg = config.type_error_message.format(

@@ -41,7 +41,6 @@ class TestValidation(unittest.TestCase):
 		test_dict2 = {"key1": 1, "key2": None}
 
 		i3 = TypedDictTest2.from_map({"data": test_dict2})
-		print(i3.data)
 		self.assertEqual(i3.data, test_dict2)
 
 	def test_list_as_field(self) -> None:

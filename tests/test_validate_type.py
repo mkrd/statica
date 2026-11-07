@@ -3,9 +3,7 @@ from typing import Any
 
 from statica.core import Field, Statica
 from statica.exceptions import TypeValidationError
-
-# Assuming the module is imported as 'validation'
-from statica.validation import validate_or_raise
+from statica.validation import validate_type
 
 
 class User(Statica):
@@ -38,219 +36,219 @@ class NestedProfile(Statica):
 	company: Company | None
 
 
-class TestValidateOrRaise(unittest.TestCase):
+class TestValidateType(unittest.TestCase):
 	# Basic type validation tests
 	def test_validate_int_success(self) -> None:
 		"""Test successful int validation"""
-		validate_or_raise(42, int)
-		validate_or_raise(0, int)
-		validate_or_raise(-1, int)
+		validate_type(42, int)
+		validate_type(0, int)
+		validate_type(-1, int)
 
 	def test_validate_int_failure(self) -> None:
 		"""Test failed int validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise("42", int)
+			validate_type("42", int)
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(42.0, int)
+			validate_type(42.0, int)
 
 	def test_validate_float_success(self) -> None:
 		"""Test successful float validation"""
-		validate_or_raise(3.14, float)
-		validate_or_raise(0.0, float)
-		validate_or_raise(-2.5, float)
+		validate_type(3.14, float)
+		validate_type(0.0, float)
+		validate_type(-2.5, float)
 
 	def test_validate_float_failure(self) -> None:
 		"""Test failed float validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise("3.14", float)
+			validate_type("3.14", float)
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(42, float)
+			validate_type(42, float)
 
 	def test_validate_str_success(self) -> None:
 		"""Test successful string validation"""
-		validate_or_raise("hello", str)
-		validate_or_raise("", str)
-		validate_or_raise("123", str)
+		validate_type("hello", str)
+		validate_type("", str)
+		validate_type("123", str)
 
 	def test_validate_str_failure(self) -> None:
 		"""Test failed string validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(123, str)
+			validate_type(123, str)
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(None, str)
+			validate_type(None, str)
 
 	def test_validate_none_success(self) -> None:
 		"""Test successful None validation"""
-		validate_or_raise(None, type(None))
+		validate_type(None, type(None))
 
 	def test_validate_none_failure(self) -> None:
 		"""Test failed None validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise("", type(None))
+			validate_type("", type(None))
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(0, type(None))
+			validate_type(0, type(None))
 
 	# Union type tests
 	def test_validate_union_int_or_str_success(self) -> None:
 		"""Test successful union int|str validation"""
 		union_type = int | str
-		validate_or_raise(42, union_type)
-		validate_or_raise("hello", union_type)
+		validate_type(42, union_type)
+		validate_type("hello", union_type)
 
 	def test_validate_union_int_or_str_failure(self) -> None:
 		"""Test failed union int|str validation"""
 		union_type = int | str
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(3.14, union_type)
+			validate_type(3.14, union_type)
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise([], union_type)
+			validate_type([], union_type)
 
 	def test_validate_union_with_none_success(self) -> None:
 		"""Test successful union with None validation"""
 		union_type = int | None
-		validate_or_raise(42, union_type)
-		validate_or_raise(None, union_type)
+		validate_type(42, union_type)
+		validate_type(None, union_type)
 
 	def test_validate_union_with_none_failure(self) -> None:
 		"""Test failed union with None validation"""
 		union_type = int | None
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise("hello", union_type)
+			validate_type("hello", union_type)
 
 	def test_validate_complex_union_success(self) -> None:
 		"""Test successful complex union validation"""
 		union_type = int | str | float | None
-		validate_or_raise(42, union_type)
-		validate_or_raise("hello", union_type)
-		validate_or_raise(3.14, union_type)
-		validate_or_raise(None, union_type)
+		validate_type(42, union_type)
+		validate_type("hello", union_type)
+		validate_type(3.14, union_type)
+		validate_type(None, union_type)
 
 	# List type tests
 	def test_validate_list_int_success(self) -> None:
 		"""Test successful list[int] validation"""
-		validate_or_raise([1, 2, 3], list[int])
-		validate_or_raise([], list[int])
-		validate_or_raise([0, -1, 100], list[int])
+		validate_type([1, 2, 3], list[int])
+		validate_type([], list[int])
+		validate_type([0, -1, 100], list[int])
 
 	def test_validate_list_int_failure(self) -> None:
 		"""Test failed list[int] validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise([1, "2", 3], list[int])
+			validate_type([1, "2", 3], list[int])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise("not a list", list[int])
+			validate_type("not a list", list[int])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise([1, 2, 3.14], list[int])
+			validate_type([1, 2, 3.14], list[int])
 
 	def test_validate_list_str_success(self) -> None:
 		"""Test successful list[str] validation"""
-		validate_or_raise(["a", "b", "c"], list[str])
-		validate_or_raise([], list[str])
-		validate_or_raise(["hello", "world", ""], list[str])
+		validate_type(["a", "b", "c"], list[str])
+		validate_type([], list[str])
+		validate_type(["hello", "world", ""], list[str])
 
 	def test_validate_list_str_failure(self) -> None:
 		"""Test failed list[str] validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(["a", 1, "c"], list[str])
+			validate_type(["a", 1, "c"], list[str])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(42, list[str])
+			validate_type(42, list[str])
 
 	# Set type tests
 	def test_validate_set_int_success(self) -> None:
 		"""Test successful set[int] validation"""
-		validate_or_raise({1, 2, 3}, set[int])
-		validate_or_raise(set(), set[int])
-		validate_or_raise({0, -1, 100}, set[int])
+		validate_type({1, 2, 3}, set[int])
+		validate_type(set(), set[int])
+		validate_type({0, -1, 100}, set[int])
 
 	def test_validate_set_int_failure(self) -> None:
 		"""Test failed set[int] validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise({1, "2", 3}, set[int])
+			validate_type({1, "2", 3}, set[int])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise([1, 2, 3], set[int])
+			validate_type([1, 2, 3], set[int])
 
 	def test_validate_set_str_success(self) -> None:
 		"""Test successful set[str] validation"""
-		validate_or_raise({"a", "b", "c"}, set[str])
-		validate_or_raise(set(), set[str])
+		validate_type({"a", "b", "c"}, set[str])
+		validate_type(set(), set[str])
 
 	def test_validate_set_str_failure(self) -> None:
 		"""Test failed set[str] validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise({"a", 1, "c"}, set[str])
+			validate_type({"a", 1, "c"}, set[str])
 
 	# Dict type tests
 	def test_validate_dict_str_int_success(self) -> None:
 		"""Test successful dict[str, int] validation"""
-		validate_or_raise({"a": 1, "b": 2}, dict[str, int])
-		validate_or_raise({}, dict[str, int])
-		validate_or_raise({"key": 0, "another": -5}, dict[str, int])
+		validate_type({"a": 1, "b": 2}, dict[str, int])
+		validate_type({}, dict[str, int])
+		validate_type({"key": 0, "another": -5}, dict[str, int])
 
 	def test_validate_dict_str_int_failure(self) -> None:
 		"""Test failed dict[str, int] validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise({"a": "1", "b": 2}, dict[str, int])
+			validate_type({"a": "1", "b": 2}, dict[str, int])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise({1: 1, "b": 2}, dict[str, int])
+			validate_type({1: 1, "b": 2}, dict[str, int])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise("not a dict", dict[str, int])
+			validate_type("not a dict", dict[str, int])
 
 	def test_validate_dict_int_str_success(self) -> None:
 		"""Test successful dict[int, str] validation"""
-		validate_or_raise({1: "a", 2: "b"}, dict[int, str])
-		validate_or_raise({}, dict[int, str])
+		validate_type({1: "a", 2: "b"}, dict[int, str])
+		validate_type({}, dict[int, str])
 
 	def test_validate_dict_int_str_failure(self) -> None:
 		"""Test failed dict[int, str] validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise({1: 1, 2: "b"}, dict[int, str])
+			validate_type({1: 1, 2: "b"}, dict[int, str])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise({"1": "a", 2: "b"}, dict[int, str])
+			validate_type({"1": "a", 2: "b"}, dict[int, str])
 
 	# Nested structure tests
 	def test_validate_nested_list_of_lists_success(self) -> None:
 		"""Test successful nested list[list[int]] validation"""
-		validate_or_raise([[1, 2], [3, 4], []], list[list[int]])
-		validate_or_raise([], list[list[int]])
-		validate_or_raise([[0]], list[list[int]])
+		validate_type([[1, 2], [3, 4], []], list[list[int]])
+		validate_type([], list[list[int]])
+		validate_type([[0]], list[list[int]])
 
 	def test_validate_nested_list_of_lists_failure(self) -> None:
 		"""Test failed nested list[list[int]] validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise([[1, 2], [3, "4"], []], list[list[int]])
+			validate_type([[1, 2], [3, "4"], []], list[list[int]])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise([[1, 2], "not a list"], list[list[int]])
+			validate_type([[1, 2], "not a list"], list[list[int]])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise([1, 2, 3], list[list[int]])
+			validate_type([1, 2, 3], list[list[int]])
 
 	def test_validate_nested_dict_of_lists_success(self) -> None:
 		"""Test successful nested dict[str, list[int]] validation"""
-		validate_or_raise({"a": [1, 2], "b": [3, 4]}, dict[str, list[int]])
-		validate_or_raise({"empty": []}, dict[str, list[int]])
-		validate_or_raise({}, dict[str, list[int]])
+		validate_type({"a": [1, 2], "b": [3, 4]}, dict[str, list[int]])
+		validate_type({"empty": []}, dict[str, list[int]])
+		validate_type({}, dict[str, list[int]])
 
 	def test_validate_nested_dict_of_lists_failure(self) -> None:
 		"""Test failed nested dict[str, list[int]] validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise({"a": [1, "2"], "b": [3, 4]}, dict[str, list[int]])
+			validate_type({"a": [1, "2"], "b": [3, 4]}, dict[str, list[int]])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise({"a": "not a list"}, dict[str, list[int]])
+			validate_type({"a": "not a list"}, dict[str, list[int]])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise({1: [1, 2]}, dict[str, list[int]])
+			validate_type({1: [1, 2]}, dict[str, list[int]])
 
 	def test_validate_nested_list_of_dicts_success(self) -> None:
 		"""Test successful nested list[dict[str, int]] validation"""
-		validate_or_raise([{"a": 1}, {"b": 2}], list[dict[str, int]])
-		validate_or_raise([{}], list[dict[str, int]])
-		validate_or_raise([], list[dict[str, int]])
+		validate_type([{"a": 1}, {"b": 2}], list[dict[str, int]])
+		validate_type([{}], list[dict[str, int]])
+		validate_type([], list[dict[str, int]])
 
 	def test_validate_nested_list_of_dicts_failure(self) -> None:
 		"""Test failed nested list[dict[str, int]] validation"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise([{"a": "1"}], list[dict[str, int]])
+			validate_type([{"a": "1"}], list[dict[str, int]])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise([{1: 1}], list[dict[str, int]])
+			validate_type([{1: 1}], list[dict[str, int]])
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(["not a dict"], list[dict[str, int]])
+			validate_type(["not a dict"], list[dict[str, int]])
 
 	def test_validate_complex_nested_structure_success(self) -> None:
 		"""Test successful complex nested structure validation"""
@@ -259,7 +257,7 @@ class TestValidateOrRaise(unittest.TestCase):
 			"users": [{"id": 1, "age": 25}, {"id": 2, "age": 30}],
 			"products": [{"id": 101, "price": 1000}],
 		}
-		validate_or_raise(data, dict[str, list[dict[str, int]]])
+		validate_type(data, dict[str, list[dict[str, int]]])
 
 	def test_validate_complex_nested_structure_failure(self) -> None:
 		"""Test failed complex nested structure validation"""
@@ -271,39 +269,39 @@ class TestValidateOrRaise(unittest.TestCase):
 			],
 		}
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(data, dict[str, list[dict[str, int]]])
+			validate_type(data, dict[str, list[dict[str, int]]])
 
 	# Union with generic types tests
 	def test_validate_union_with_generic_success(self) -> None:
 		"""Test successful union with generic types validation"""
 		union_type = list[int] | str
-		validate_or_raise([1, 2, 3], union_type)
-		validate_or_raise("hello", union_type)
+		validate_type([1, 2, 3], union_type)
+		validate_type("hello", union_type)
 
 	def test_validate_union_with_generic_failure(self) -> None:
 		"""Test failed union with generic types validation"""
 		union_type = list[int] | str
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise([1, "2", 3], union_type)
+			validate_type([1, "2", 3], union_type)
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(42, union_type)
+			validate_type(42, union_type)
 
 	def test_validate_complex_union_with_generics_success(self) -> None:
 		"""Test successful complex union with generic types"""
 		union_type = list[str] | dict[str, int] | None
-		validate_or_raise(["a", "b"], union_type)
-		validate_or_raise({"key": 1}, union_type)
-		validate_or_raise(None, union_type)
+		validate_type(["a", "b"], union_type)
+		validate_type({"key": 1}, union_type)
+		validate_type(None, union_type)
 
 	def test_validate_complex_union_with_generics_failure(self) -> None:
 		"""Test failed complex union with generic types"""
 		union_type = list[str] | dict[str, int] | None
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise([1, 2], union_type)  # should be list[str]
+			validate_type([1, 2], union_type)  # should be list[str]
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise({"key": "value"}, union_type)  # should be dict[str, int]
+			validate_type({"key": "value"}, union_type)  # should be dict[str, int]
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(42, union_type)
+			validate_type(42, union_type)
 
 	def test_validate_deeply_nested_success(self) -> None:
 		"""Test successful deeply nested structure validation"""
@@ -312,7 +310,7 @@ class TestValidateOrRaise(unittest.TestCase):
 			{"group1": [{"item1": 1, "item2": 2}, {"item3": 3}], "group2": []},
 			{"group3": [{"item4": 4}]},
 		]
-		validate_or_raise(data, list[dict[str, list[dict[str, int]]]])
+		validate_type(data, list[dict[str, list[dict[str, int]]]])
 
 	def test_validate_deeply_nested_failure(self) -> None:
 		"""Test failed deeply nested structure validation"""
@@ -326,13 +324,13 @@ class TestValidateOrRaise(unittest.TestCase):
 			},
 		]
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(data, list[dict[str, list[dict[str, int]]]])
+			validate_type(data, list[dict[str, list[dict[str, int]]]])
 
 	def test_validate_mixed_union_nested_success(self) -> None:
 		"""Test successful mixed union with nested structures"""
 		# dict[str, int | list[str]]
 		data = {"count": 5, "items": ["a", "b", "c"], "total": 100}
-		validate_or_raise(data, dict[str, int | list[str]])
+		validate_type(data, dict[str, int | list[str]])
 
 	def test_validate_mixed_union_nested_failure(self) -> None:
 		"""Test failed mixed union with nested structures"""
@@ -343,48 +341,48 @@ class TestValidateOrRaise(unittest.TestCase):
 			"total": 100,
 		}
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(data, dict[str, int | list[str]])
+			validate_type(data, dict[str, int | list[str]])
 
 	def test_validate_empty_containers_success(self) -> None:
 		"""Test successful validation of empty containers"""
-		validate_or_raise([], list[int])
-		validate_or_raise(set(), set[str])
-		validate_or_raise({}, dict[str, int])
-		validate_or_raise([], list[dict[str, list[int]]])
+		validate_type([], list[int])
+		validate_type(set(), set[str])
+		validate_type({}, dict[str, int])
+		validate_type([], list[dict[str, list[int]]])
 
 	def test_validate_unsupported_generic_type_failure(self) -> None:
 		"""Test validation failure for unsupported generic types"""
 		# This would test tuple or other unsupported generic types
 		# Note: This test assumes tuple is not supported based on the code
 		with self.assertRaisesRegex(TypeValidationError, r".*not supported.*"):
-			validate_or_raise((1, 2, 3), tuple[int, ...])
+			validate_type((1, 2, 3), tuple[int, ...])
 
 	# Statica subclass tests
 	def test_validate_statica_instance_success(self) -> None:
 		"""Test successful validation of Statica instance"""
 		user = User(name="John", age=30, email="john@example.com")
-		validate_or_raise(user, User)
+		validate_type(user, User)
 
 	def test_validate_statica_instance_failure(self) -> None:
 		"""Test failed validation of Statica instance - wrong type"""
 		user = User(name="John", age=30, email="john@example.com")
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(user, Address)
+			validate_type(user, Address)
 
 	def test_validate_statica_subclass_hierarchy_success(self) -> None:
 		"""Test successful validation with Statica subclass hierarchy"""
 		user = User(name="John", age=30, email="john@example.com")
 		# User should validate against Statica base class
-		validate_or_raise(user, Statica)
+		validate_type(user, Statica)
 
 	def test_validate_non_statica_against_statica_failure(self) -> None:
 		"""Test failed validation of non-Statica against Statica type"""
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise("not a statica", User)
+			validate_type("not a statica", User)
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise({"name": "John", "age": 30}, User)
+			validate_type({"name": "John", "age": 30}, User)
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(42, User)
+			validate_type(42, User)
 
 	def test_validate_statica_union_success(self) -> None:
 		"""Test successful validation of union with Statica types"""
@@ -392,32 +390,32 @@ class TestValidateOrRaise(unittest.TestCase):
 		address = Address(street="123 Main St", city="Anytown", zipcode="12345")
 
 		union_type = User | Address
-		validate_or_raise(user, union_type)
-		validate_or_raise(address, union_type)
+		validate_type(user, union_type)
+		validate_type(address, union_type)
 
 	def test_validate_statica_union_failure(self) -> None:
 		"""Test failed validation of union with Statica types"""
 		union_type = User | Address
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise("not a statica", union_type)
+			validate_type("not a statica", union_type)
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(42, union_type)
+			validate_type(42, union_type)
 
 	def test_validate_statica_with_none_union_success(self) -> None:
 		"""Test successful validation of Statica | None union"""
 		user = User(name="John", age=30, email="john@example.com")
 		union_type = User | None
 
-		validate_or_raise(user, union_type)
-		validate_or_raise(None, union_type)
+		validate_type(user, union_type)
+		validate_type(None, union_type)
 
 	def test_validate_statica_with_none_union_failure(self) -> None:
 		"""Test failed validation of Statica | None union"""
 		union_type = User | None
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise("not a user", union_type)
+			validate_type("not a user", union_type)
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(42, union_type)
+			validate_type(42, union_type)
 
 	def test_validate_list_of_statica_success(self) -> None:
 		"""Test successful validation of list[Statica]"""
@@ -425,8 +423,8 @@ class TestValidateOrRaise(unittest.TestCase):
 			User(name="John", age=30, email="john@example.com"),
 			User(name="Jane", age=25, email="jane@example.com"),
 		]
-		validate_or_raise(users, list[User])
-		validate_or_raise([], list[User])
+		validate_type(users, list[User])
+		validate_type([], list[User])
 
 	def test_validate_list_of_statica_failure(self) -> None:
 		"""Test failed validation of list[Statica]"""
@@ -435,7 +433,7 @@ class TestValidateOrRaise(unittest.TestCase):
 			"not a user",  # Invalid item
 		]
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(users, list[User])
+			validate_type(users, list[User])
 
 	def test_validate_dict_with_statica_values_success(self) -> None:
 		"""Test successful validation of dict[str, Statica]"""
@@ -443,8 +441,8 @@ class TestValidateOrRaise(unittest.TestCase):
 			"user1": User(name="John", age=30, email="john@example.com"),
 			"user2": User(name="Jane", age=25, email="jane@example.com"),
 		}
-		validate_or_raise(user_dict, dict[str, User])
-		validate_or_raise({}, dict[str, User])
+		validate_type(user_dict, dict[str, User])
+		validate_type({}, dict[str, User])
 
 	def test_validate_dict_with_statica_values_failure(self) -> None:
 		"""Test failed validation of dict[str, Statica]"""
@@ -453,7 +451,7 @@ class TestValidateOrRaise(unittest.TestCase):
 			"user2": "not a user",  # Invalid value
 		}
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(user_dict, dict[str, User])
+			validate_type(user_dict, dict[str, User])
 
 	def test_validate_dict_with_statica_keys_success(self) -> None:
 		"""Test successful validation of dict[Statica, str]"""
@@ -461,7 +459,7 @@ class TestValidateOrRaise(unittest.TestCase):
 		user2 = User(name="Jane", age=25, email="jane@example.com")
 
 		user_dict = {"1": user1, "2": user2}
-		validate_or_raise(user_dict, dict[str, User])
+		validate_type(user_dict, dict[str, User])
 
 	def test_validate_nested_statica_structure_success(self) -> None:
 		"""Test successful validation of nested Statica structures"""
@@ -475,7 +473,7 @@ class TestValidateOrRaise(unittest.TestCase):
 			metadata={"role": "engineer", "level": "senior"},
 		)
 
-		validate_or_raise(profile, Profile)
+		validate_type(profile, Profile)
 
 	def test_validate_nested_statica_structure_failure(self) -> None:
 		"""Test failed validation of nested Statica structures"""
@@ -509,7 +507,7 @@ class TestValidateOrRaise(unittest.TestCase):
 		]
 
 		nested_profile = NestedProfile(profiles=profiles, company=company)
-		validate_or_raise(nested_profile, NestedProfile)
+		validate_type(nested_profile, NestedProfile)
 
 	def test_validate_deeply_nested_statica_failure(self) -> None:
 		"""Test failed validation of deeply nested Statica structures"""
@@ -527,7 +525,7 @@ class TestValidateOrRaise(unittest.TestCase):
 		address = Address(street="123 Main St", city="Anytown", zipcode="12345")
 
 		mixed_list = [user, address]
-		validate_or_raise(mixed_list, list[User | Address])
+		validate_type(mixed_list, list[User | Address])
 
 	def test_validate_list_of_statica_unions_failure(self) -> None:
 		"""Test failed validation of list[Statica1 | Statica2]"""
@@ -535,25 +533,25 @@ class TestValidateOrRaise(unittest.TestCase):
 
 		mixed_list = [user, "not a statica"]
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(mixed_list, list[User | Address])
+			validate_type(mixed_list, list[User | Address])
 
 	def test_validate_complex_statica_union_success(self) -> None:
 		"""Test successful validation of complex union with Statica and primitives"""
 		user = User(name="John", age=30, email="john@example.com")
 		union_type = User | str | int | None
 
-		validate_or_raise(user, union_type)
-		validate_or_raise("string", union_type)
-		validate_or_raise(42, union_type)
-		validate_or_raise(None, union_type)
+		validate_type(user, union_type)
+		validate_type("string", union_type)
+		validate_type(42, union_type)
+		validate_type(None, union_type)
 
 	def test_validate_complex_statica_union_failure(self) -> None:
 		"""Test failed validation of complex union with Statica and primitives"""
 		union_type = User | str | int | None
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(3.14, union_type)  # float not in union
+			validate_type(3.14, union_type)  # float not in union
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise([], union_type)  # list not in union
+			validate_type([], union_type)  # list not in union
 
 	def test_validate_set_of_statica_failure(self) -> None:
 		"""Test failed validation of set[Statica]"""
@@ -563,7 +561,7 @@ class TestValidateOrRaise(unittest.TestCase):
 			User(name="John", age=30, email="john@example.com"),
 		]
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(users, set[User])
+			validate_type(users, set[User])
 
 	def test_validate_mixed_generic_with_statica_success(self) -> None:
 		"""Test successful validation of mixed generic structures with Statica"""
@@ -572,7 +570,7 @@ class TestValidateOrRaise(unittest.TestCase):
 		user2 = User(name="Jane", age=25, email="jane@example.com")
 
 		data: dict[str, list[User]] = {"team1": [user1], "team2": [user2], "team3": []}
-		validate_or_raise(data, dict[str, list[User]])
+		validate_type(data, dict[str, list[User]])
 
 	def test_validate_mixed_generic_with_statica_failure(self) -> None:
 		"""Test failed validation of mixed generic structures with Statica"""
@@ -584,7 +582,7 @@ class TestValidateOrRaise(unittest.TestCase):
 			"team2": ["not a user"],  # Invalid list item
 		}
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(data, dict[str, list[User]])
+			validate_type(data, dict[str, list[User]])
 
 	def test_validate_optional_statica_in_complex_structure_success(self) -> None:
 		"""Test successful validation of optional Statica in complex structures"""
@@ -595,7 +593,7 @@ class TestValidateOrRaise(unittest.TestCase):
 			{"active_user": user, "inactive_user": None},
 			{"active_user": None, "inactive_user": user},
 		]
-		validate_or_raise(data, list[dict[str, User | None]])
+		validate_type(data, list[dict[str, User | None]])
 
 	def test_validate_optional_statica_in_complex_structure_failure(self) -> None:
 		"""Test failed validation of optional Statica in complex structures"""
@@ -604,4 +602,4 @@ class TestValidateOrRaise(unittest.TestCase):
 			{"active_user": "not a user", "inactive_user": None},  # Invalid user
 		]
 		with self.assertRaises(TypeValidationError):
-			validate_or_raise(data, list[dict[str, User | None]])
+			validate_type(data, list[dict[str, User | None]])

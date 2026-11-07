@@ -17,7 +17,7 @@ from typing import (
 
 from statica.config import StaticaConfig, default_config
 from statica.exceptions import ConstraintValidationError, TypeValidationError
-from statica.validation import is_union, validate_constraints, validate_or_raise
+from statica.validation import is_union, validate_constraints, validate_type
 
 if TYPE_CHECKING:
 	from collections.abc import Callable, Mapping
@@ -107,9 +107,9 @@ class FieldDescriptor(Generic[T]):
 		self.name = name
 		self.owner = owner
 		self.expected_type = get_type_hints(owner)[name]
-		self.statica_sub_class = get_statica_subclass(self.expected_type)
+		self.statica_sub_class = find_statica_sub_class(self.expected_type)
 
-	def get_default_safe(self) -> Any:
+	def default_for_new_instance(self) -> Any:
 		"""
 		Get the default value of the field, safely handling mutable defaults.
 		"""
@@ -160,7 +160,7 @@ class FieldDescriptor(Generic[T]):
 
 			# (3/4) Validate type of the value
 
-			validate_or_raise(value, self.expected_type, config=config)
+			validate_type(value, self.expected_type, config=config)
 
 			# (4/4) Validate constraints if any are set
 
@@ -184,7 +184,7 @@ class FieldDescriptor(Generic[T]):
 		return value
 
 
-def get_statica_subclass(expected_type: Any) -> type[Statica] | None:
+def find_statica_sub_class(expected_type: Any) -> type[Statica] | None:
 	"""
 	Get the first Statica subclass among the union members of the expected type.
 	Returns None if no Statica subclass is found.
@@ -271,7 +271,7 @@ def statica_init(self: Statica, **kwargs: Any) -> None:
 		if field_descriptor.name in kwargs:
 			value = kwargs[field_descriptor.name]
 		else:
-			value = field_descriptor.get_default_safe()
+			value = field_descriptor.default_for_new_instance()
 		setattr(self, field_descriptor.name, value)
 
 
@@ -312,18 +312,18 @@ class StaticaMeta(type):
 
 		# Set up Field descriptors for type-hinted attributes
 
-		for attr_annotated in annotations:
-			existing_value = namespace.get(attr_annotated)
+		for field_name in annotations:
+			class_body_value = namespace.get(field_name)
 
-			if isinstance(existing_value, FieldDescriptor):
+			if isinstance(class_body_value, FieldDescriptor):
 				# A Field() object can be reused for several fields, and __set_name__
 				# binds a descriptor to one field, so each field gets its own copy
-				namespace[attr_annotated] = copy.copy(existing_value)
+				namespace[field_name] = copy.copy(class_body_value)
 				continue
 
 			# A field without Field(), like `name: str` or `timeout: float = 30.0`.
 			# The assigned value, if any, becomes the default.
-			namespace[attr_annotated] = FieldDescriptor(default=namespace.get(attr_annotated))
+			namespace[field_name] = FieldDescriptor(default=namespace.get(field_name))
 
 		# Collect all fields, parents first. A field redeclared in this class keeps its
 		# position and takes this class's descriptor.
@@ -350,10 +350,10 @@ class Statica(metaclass=StaticaMeta):
 
 		kwargs = {}
 		for field_descriptor in cls.__field_descriptors__:
-			expected_field_name = field_descriptor.alias or field_descriptor.name
+			mapping_key = field_descriptor.alias or field_descriptor.name
 
-			if expected_field_name in mapping:
-				kwargs[field_descriptor.name] = mapping[expected_field_name]
+			if mapping_key in mapping:
+				kwargs[field_descriptor.name] = mapping[mapping_key]
 
 		return cls(**kwargs)  # Init function will validate fields and set defaults
 
@@ -366,7 +366,7 @@ class Statica(metaclass=StaticaMeta):
 		result_dict = {}
 
 		for field_descriptor in type(self).__field_descriptors__:
-			key_name = (
+			mapping_key = (
 				field_descriptor.alias
 				if with_aliases and field_descriptor.alias is not None
 				else field_descriptor.name
@@ -378,6 +378,6 @@ class Statica(metaclass=StaticaMeta):
 			if isinstance(field_value, Statica):
 				field_value = field_value.to_dict(with_aliases=with_aliases)
 
-			result_dict[key_name] = field_value
+			result_dict[mapping_key] = field_value
 
 		return result_dict
