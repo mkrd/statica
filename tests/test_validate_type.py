@@ -721,3 +721,22 @@ class TestFieldTypeValidation(unittest.TestCase):
 
 		with self.assertRaises(TypeValidationError):
 			LiteralTest.from_map({"data": "a", "number": 4})
+
+	def test_bool_is_not_accepted_as_int(self) -> None:
+		class Counts(Statica):
+			count: int | None = None
+			counts: list[int] | None = None
+			ratio: float | None = None
+			active: bool | None = None
+
+		# bool is a subclass of int in Python, but True is not a count
+		for field_name, invalid_value in {
+			"count": True,
+			"counts": [1, False],
+			"ratio": True,
+		}.items():
+			with self.subTest(field_name), self.assertRaises(TypeValidationError):
+				Counts.from_map({field_name: invalid_value})
+
+		self.assertTrue(Counts(active=True).active)
+		self.assertEqual(Counts(count=1).count, 1)

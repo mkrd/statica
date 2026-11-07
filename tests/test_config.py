@@ -1,4 +1,5 @@
 import unittest
+from typing import Literal
 
 from statica import ConstraintValidationError, Field, Statica, TypeValidationError
 from statica.config import StaticaConfig
@@ -195,6 +196,32 @@ class TestConfig(unittest.TestCase):
 				with self.assertRaises(TypeValidationError) as cm:
 					CollectionTest.from_map({field_name: invalid_value})
 				self.assertIn("Custom:", str(cm.exception))
+
+	def test_literal_error_message(self) -> None:
+		custom_config = StaticaConfig.create(
+			literal_error_message="{value} is not one of {allowed_values}",
+		)
+
+		class DefaultLiteral(Statica):
+			mode: Literal["a", "b"]
+
+		class CustomLiteral(Statica, config=custom_config):
+			mode: Literal["a", "b"]
+
+		class CustomLiteralList(Statica, config=custom_config):
+			modes: list[Literal["a", "b"]]
+
+		with self.assertRaises(TypeValidationError) as cm:
+			DefaultLiteral(mode="c")  # type: ignore[arg-type]
+		self.assertEqual(str(cm.exception), "expected one of ('a', 'b'), got 'c'")
+
+		with self.assertRaises(TypeValidationError) as cm:
+			CustomLiteral(mode="c")  # type: ignore[arg-type]
+		self.assertEqual(str(cm.exception), "c is not one of ('a', 'b')")
+
+		with self.assertRaises(TypeValidationError) as cm:
+			CustomLiteralList(modes=["c"])  # type: ignore[list-item]
+		self.assertEqual(str(cm.exception), "c is not one of ('a', 'b')")
 
 	def test_config_with_list_and_dict_constraints(self) -> None:
 		"""Test custom configuration with list and dict length constraints."""

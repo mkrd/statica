@@ -107,12 +107,14 @@ def validate_type(
 	# Handle Literal (e.g. Literal["a", "b"], with any number and type of values)
 
 	if is_literal_generic_alias(expected_type):
-		validate_literal(value, expected_type)
+		validate_literal(value, expected_type, config)
 		return
 
-	# Handle all other types
+	# Handle all other types. bool is a subclass of int, but True and False are not
+	# valid values for an int field.
 
-	if isinstance(value, expected_type):
+	is_bool_for_int = expected_type is int and isinstance(value, bool)
+	if isinstance(value, expected_type) and not is_bool_for_int:
 		return
 
 	msg = config.type_error_message.format(
@@ -125,13 +127,17 @@ def validate_type(
 def validate_literal(
 	value: Any,
 	expected_type: LiteralGenericAlias,
+	config: StaticaConfig,
 ) -> None:
 	"""
 	Validate that the value matches one of the literals in the expected_type.
 	Throws TypeValidationError if the value is not one of the literals.
 	"""
 	if value not in expected_type.__args__:
-		msg = f"expected one of {expected_type.__args__}, got '{value}'"
+		msg = config.literal_error_message.format(
+			allowed_values=expected_type.__args__,
+			value=value,
+		)
 		raise TypeValidationError(msg)
 
 
