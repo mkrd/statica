@@ -43,16 +43,13 @@ line-length = 100
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-	"ANN202",  # Missing return type annotation for private function
 	"ANN401",  # Dynamically typed expressions (typing.Any) are disallowed
 	"COM812",  # Missing trailing comma
 	"CPY001",  # Missing copyright notice
 	"D",       # docstrings
 	"ERA001",  # Found commented-out code
-	"INP001",  # File is part of an implicit namespace package. Add an `__init__.py`.
 	"PLR0913", # Too many arguments in function definition (6 > 5)
 	"PT",      # pytest, project uses stdlib unittest
-	"S101",    # Use of `assert` detected
 	"T201",    # `print` found
 	"W191",    # indentation contains tabs
 ]

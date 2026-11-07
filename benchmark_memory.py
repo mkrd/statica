@@ -17,9 +17,7 @@ class StaticaModel(Statica):
 def measure_memory_usage_mb(cls: Any, num_objects: int = 100_000) -> float:
 	tracemalloc.start()
 
-	objects = []
-	for _ in range(num_objects):
-		objects.append(cls(**test_data))  # noqa: PERF401
+	_ = [cls(**test_data) for _ in range(num_objects)]
 
 	_, peak = tracemalloc.get_traced_memory()
 	tracemalloc.stop()

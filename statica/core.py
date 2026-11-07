@@ -199,19 +199,6 @@ def get_statica_subclass(expected_type: Any) -> type[Statica] | None:
 	return None
 
 
-def get_field_descriptors(cls: type[Statica]) -> list[FieldDescriptor[Any]]:
-	"""
-	Get all Field descriptors for a class.
-	Returns a list of FieldDescriptor instances.
-
-	The list is computed once by the metaclass at class-creation time and
-	cached as `__field_descriptors__`, so repeated calls (e.g. from `from_map`
-	or `to_dict`) don't need to rescan the class namespace.
-	"""
-
-	return cls.__field_descriptors__
-
-
 ########################################################################################
 #### MARK: Type-safe field function
 
@@ -362,7 +349,7 @@ class Statica(metaclass=StaticaMeta):
 		# Fields might have aliases, so we need to map them correctly
 
 		kwargs = {}
-		for field_descriptor in get_field_descriptors(cls):
+		for field_descriptor in cls.__field_descriptors__:
 			expected_field_name = field_descriptor.alias or field_descriptor.name
 
 			if expected_field_name in mapping:
@@ -378,7 +365,7 @@ class Statica(metaclass=StaticaMeta):
 
 		result_dict = {}
 
-		for field_descriptor in get_field_descriptors(self.__class__):
+		for field_descriptor in type(self).__field_descriptors__:
 			key_name = (
 				field_descriptor.alias
 				if with_aliases and field_descriptor.alias is not None
@@ -394,41 +381,3 @@ class Statica(metaclass=StaticaMeta):
 			result_dict[key_name] = field_value
 
 		return result_dict
-
-
-########################################################################################
-#### MARK: Main
-
-if __name__ == "__main__":
-	config = StaticaConfig.create(type_error_message="!!!!")
-
-	class User(Statica, config=config):
-		age: int = Field(min_value=0, max_value=120)
-		data: dict[str, int] | None
-
-	u = User.from_map({"age": "-1"})
-	u2 = User(age=30, data={"key": 42})
-
-	class Payload(Statica):
-		type_error_class = ValueError
-
-		name: str = Field(min_length=3, max_length=50, strip_whitespace=True)
-		description: str | None = Field(max_length=200)
-		num: int | float
-		float_num: float | None = Field(alias="floatNum")
-
-	data = {
-		"name": "Test Payload",
-		"description": "ddf",
-		"num": 5,
-		"floatNum": 5.5,
-	}
-
-	payload = Payload.from_map(data)
-
-	direct_init = Payload(
-		name="Test",
-		description="This is a test description.",
-		num=42,
-		float_num=3.14,
-	)
